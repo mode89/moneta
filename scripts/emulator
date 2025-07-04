@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+AVD_NAME = "moneta"
+SDK_PACKAGE = "system-images;android-32;google_apis;x86_64"
+
+def main():
+    """Main function."""
+    # Check if AVD exists, create if not
+    if not avd_exists(AVD_NAME):
+        if not create_avd(AVD_NAME, SDK_PACKAGE):
+            print("Failed to create AVD")
+            sys.exit(1)
+    else:
+        print(f"AVD '{AVD_NAME}' already exists.")
+
+    # Enable hardware keyboard
+    enable_hardware_keyboard(AVD_NAME)
+
+    # Start emulator
+    start_emulator(AVD_NAME)
+
+def run_command(cmd, input_text=None, capture_output=True):
+    """Run a shell command and return the result."""
+    try:
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            input=input_text,
+            text=True,
+            capture_output=capture_output
+        )
+        return result
+    except subprocess.SubprocessError as e:
+        print(f"Error running command '{cmd}': {e}")
+        return None
+
+def avd_exists(avd_name):
+    """Check if AVD already exists."""
+    result = run_command("avdmanager list avd")
+    if result and result.returncode == 0:
+        return avd_name in result.stdout
+    return False
+
+def create_avd(avd_name, sdk_package):
+    """Create a new AVD."""
+    print(f"Creating AVD: {avd_name}")
+    cmd = f"avdmanager create avd --name \"{avd_name}\" --package \"{sdk_package}\""
+    result = run_command(cmd, input_text="no\n", capture_output=False)
+    return result and result.returncode == 0
+
+def enable_hardware_keyboard(avd_name):
+    """Enable hardware keyboard for the AVD."""
+    home_dir = Path.home()
+    config_file = home_dir / \
+        ".android" / "avd" / f"{avd_name}.avd" / "config.ini"
+
+    if not config_file.exists():
+        print(f"Warning: AVD config file not found at {config_file}")
+        return False
+
+    # Read current config
+    with open(config_file, "r") as f:
+        content = f.read()
+
+    changed = False
+    if re.search(r"hw\.keyboard\s*=\s*yes", content):
+        print(f"hw.keyboard already enabled in {config_file}")
+        return True
+
+    # Use re.sub to find and replace existing hw.keyboard entries
+    # or append if not found.
+    if re.search(r"hw\.keyboard\s*=\s*.*", content):
+        content = re.sub(
+            r"hw\.keyboard\s*=\s*.*", "hw.keyboard = yes", content)
+        changed = True
+    else:
+        content += "\nhw.keyboard = yes\n"
+        changed = True
+
+    if changed:
+        print(f"Updating hw.keyboard setting in {config_file}")
+        with open(config_file, "w") as f:
+            f.write(content)
+        return True
+    return False
+
+def start_emulator(avd_name):
+    """Start the emulator."""
+    print(f"Starting emulator: {avd_name}")
+    cmd = f"emulator -avd \"{avd_name}\""
+    result = run_command(cmd, capture_output=False)
+    return result and result.returncode == 0
+
+if __name__ == "__main__":
+    main()
