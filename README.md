@@ -14,3 +14,9 @@ Run emulator:
 ```
 $ emulator -avd <name>
 ```
+
+Build and install APK:
+```
+$ scripts/build
+$ scripts/install
+```
