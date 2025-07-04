@@ -2,9 +2,9 @@ package com.example.helloandroid;
 
 import android.app.Activity;
 import android.os.Bundle;
-import android.widget.LinearLayout;
-import android.widget.TextView;
 import android.view.ViewGroup;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
 
 public class MainActivity extends Activity {
 
@@ -12,23 +12,19 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Create a LinearLayout to hold the UI components
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setLayoutParams(
-            new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
+        // Create a WebView programmatically
+        WebView webView = new WebView(this);
+        webView.setLayoutParams(new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // Create a TextView
-        TextView textView = new TextView(this);
-        textView.setText("Hello, Mode!");
-        textView.setTextSize(30); // Set text size in pixels
+        WebSettings webSettings = webView.getSettings();
+        webSettings.setJavaScriptEnabled(true); // Enable JavaScript if needed
 
-        // Add the TextView to the LinearLayout
-        layout.addView(textView);
+        // Load HTML content
+        webView.loadUrl("file:///android_asset/index.html");
 
-        // Set the LinearLayout as the content view for the activity
-        setContentView(layout);
+        // Set the WebView as the content view for the activity
+        setContentView(webView);
     }
 }
