@@ -211,10 +211,13 @@
    [add-button]
    [expense-modal]])
 
-(swap! app-state assoc
-       :expenses (load-expenses)
-       :form {:amount ""
-              :description ""
-              :date (get-today-string)
-              :categories ""})
-(rdom/render [app] (.getElementById js/document "app"))
+(defn- main []
+  (swap! app-state assoc
+         :expenses (load-expenses)
+         :form {:amount ""
+                :description ""
+                :date (get-today-string)
+                :categories ""})
+  (rdom/render [app] (.getElementById js/document "app")))
+
+(main)
