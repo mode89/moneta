@@ -4,7 +4,9 @@
 ;; App state
 (def app-state
   (r/atom {:expenses []
-           :adding-entry? false}))
+           :adding-entry? false
+           :editing-entry? false
+           :editing-entry-id nil}))
 
 (def edited-entry
   (r/atom {:amount ""
@@ -73,27 +75,76 @@
         error (validate-form form)]
     (if error
       (js/alert error)
-      (let [new-expense {:id (.now js/Date)
-                         :amount (js/parseFloat (:amount form))
-                         :description (:description form)
-                         :date (:date form)
-                         :categories (parse-categories (:categories form))}
-            current-expenses (:expenses @app-state)
-            updated-expenses (conj current-expenses new-expense)]
-        (save-expenses updated-expenses)
+      (let [expense {:id (.now js/Date)
+                     :amount (js/parseFloat (:amount form))
+                     :description (:description form)
+                     :date (:date form)
+                     :categories (parse-categories (:categories form))}
+            expenses (:expenses @app-state)
+            expenses* (conj expenses expense)]
+        (save-expenses expenses*)
         (swap! app-state assoc
-               :expenses updated-expenses
+               :expenses expenses*
                :adding-entry? false)
         (reset! edited-entry {:amount ""
                               :description ""
                               :date (get-today-string)
                               :categories ""})))))
 
-(defn show-modal []
+(defn update-expense []
+  (let [form @edited-entry
+        error (validate-form form)
+        editing-id (:editing-entry-id @app-state)]
+    (if error
+      (js/alert error)
+      (let [expense {:id editing-id
+                     :amount (js/parseFloat (:amount form))
+                     :description (:description form)
+                     :date (:date form)
+                     :categories (parse-categories (:categories form))}
+            expenses (:expenses @app-state)
+            expenses* (map #(if (= (:id %) editing-id) expense %) expenses)]
+        (save-expenses expenses*)
+        (swap! app-state assoc
+               :expenses expenses*
+               :editing-entry? false
+               :editing-entry-id nil)
+        (reset! edited-entry {:amount ""
+                              :description ""
+                              :date (get-today-string)
+                              :categories ""})))))
+
+(defn delete-expense [expense-id]
+  (when (js/confirm "Are you sure you want to delete this expense?")
+    (let [expenses (:expenses @app-state)
+          expenses* (filter #(not= (:id %) expense-id) expenses)]
+      (save-expenses expenses*)
+      (swap! app-state assoc :expenses expenses*))))
+
+(defn show-new-entry-modal []
   (swap! app-state assoc :adding-entry? true))
 
-(defn hide-modal []
+(defn hide-new-entry-modal []
   (swap! app-state assoc :adding-entry? false)
+  (reset! edited-entry {:amount ""
+                        :description ""
+                        :date (get-today-string)
+                        :categories ""}))
+
+(defn show-edit-entry-modal [expense]
+  (reset! edited-entry
+          {:amount (str (:amount expense))
+           :description (:description expense)
+           :date (:date expense)
+           :categories (clojure.string/join " " (:categories expense))})
+  (swap! app-state assoc
+         :editing-entry? true
+         :editing-entry-id (:id expense)))
+
+(defn hide-edit-entry-modal []
+  (swap! app-state assoc
+         :editing-entry? false
+         :editing-entry-id nil)
   (reset! edited-entry {:amount ""
                         :description ""
                         :date (get-today-string)
@@ -115,10 +166,10 @@
 (defn add-button []
   [:button.btn.btn-primary.btn-lg.rounded-circle.fixed-bottom-right
    {:style {:z-index "1000"}
-    :on-click show-modal}
+    :on-click show-new-entry-modal}
    "+"])
 
-(defn expense-modal []
+(defn new-entry-modal []
   (let [form @edited-entry
         show (:adding-entry? @app-state)]
     [:div
@@ -132,7 +183,7 @@
         [:h5.modal-title "New Expense"]
         [:button.btn-close
          {:type "button"
-          :on-click hide-modal}]]
+          :on-click hide-new-entry-modal}]]
        [:div.modal-body
         [:form
          [:div.mb-3
@@ -173,23 +224,124 @@
        [:div.modal-footer
         [:button.btn.btn-secondary
          {:type "button"
-          :on-click hide-modal}
+          :on-click hide-new-entry-modal}
          "Cancel"]
         [:button.btn.btn-primary
          {:type "button"
           :on-click #(add-expense)}
          "Save"]]]]]))
 
-(defn expense-item [expense]
-  [:li.list-group-item
-   [:div.d-flex.justify-content-between
+(defn edit-entry-modal []
+  (let [form @edited-entry
+        show (:editing-entry? @app-state)
+        editing-id (:editing-entry-id @app-state)]
     [:div
-     [:div.fw-bold (:description expense)]
-     [:small.text-muted (:date expense)]
-     (when (and (:categories expense) (seq (:categories expense)))
-       [:div.text-info.small
-        (clojure.string/join ", " (:categories expense))])]
-    [:div.text-danger (str "-" (format-currency (:amount expense)))]]])
+     {:class (str "modal fade" (when show " show"))
+      :style {:display (if show "block" "none")
+              :background-color "rgba(0,0,0,0.5)"}
+      :tab-index "-1"}
+     [:div.modal-dialog.modal-dialog-centered
+      [:div.modal-content
+       [:div.modal-header
+        [:h5.modal-title "Edit Expense"]
+        [:button.btn-close
+         {:type "button"
+          :on-click hide-edit-entry-modal}]]
+       [:div.modal-body
+        [:form
+         [:div.mb-3
+          [:label.form-label {:for "editExpenseAmount"} "Amount"]
+          [:input.form-control
+           {:id "editExpenseAmount"
+            :type "number"
+            :placeholder "0.00"
+            :step "0.01"
+            :value (:amount form)
+            :on-change #(update-form :amount (-> % .-target .-value))}]]
+         [:div.mb-3
+          [:label.form-label {:for "editExpenseDescription"} "Description"]
+          [:input.form-control
+           {:id "editExpenseDescription"
+            :type "text"
+            :placeholder "e.g., Groceries, Dinner"
+            :value (:description form)
+            :on-change #(update-form :description
+                          (-> % .-target .-value))}]]
+         [:div.mb-3
+          [:label.form-label {:for "editExpenseDate"} "Date"]
+          [:input.form-control
+           {:id "editExpenseDate"
+            :type "date"
+            :value (:date form)
+            :on-change #(update-form :date (-> % .-target .-value))}]]
+         [:div.mb-3
+          [:label.form-label {:for "editExpenseCategories"}
+           "Categories"]
+          [:input.form-control
+           {:id "editExpenseCategories"
+            :type "text"
+            :placeholder "e.g. food shopping"
+            :value (:categories form)
+            :on-change #(update-form :categories
+                          (-> % .-target .-value))}]]]]
+       [:div.modal-footer
+        [:button.btn.btn-danger.me-auto
+         {:type "button"
+          :on-click #(do (delete-expense editing-id)
+                         (hide-edit-entry-modal))}
+         "Delete"]
+        [:button.btn.btn-secondary
+         {:type "button"
+          :on-click hide-edit-entry-modal}
+         "Cancel"]
+        [:button.btn.btn-primary
+         {:type "button"
+          :on-click #(update-expense)}
+         "Update"]]]]]))
+
+(defn on-long-press [f]
+  (let [timer (r/atom nil)]
+    {:on-mouse-down (fn [e]
+                      (.preventDefault e)
+                      (reset! timer
+                        (js/setTimeout f 500)))
+     :on-mouse-up (fn [e]
+                    (.preventDefault e)
+                    (when @timer
+                      (js/clearTimeout @timer)
+                      (reset! timer nil)))
+     :on-mouse-leave (fn [e]
+                       (when @timer
+                         (js/clearTimeout @timer)
+                         (reset! timer nil)))
+     :on-touch-start (fn [e]
+                       (.preventDefault e)
+                       (reset! timer
+                         (js/setTimeout f 500)))
+     :on-touch-end (fn [e]
+                     (.preventDefault e)
+                     (when @timer
+                       (js/clearTimeout @timer)
+                       (reset! timer nil)))
+     :on-touch-cancel (fn [e]
+                        (when @timer
+                          (js/clearTimeout @timer)
+                          (reset! timer nil)))}))
+
+(defn expense-item [expense]
+  (let [long-press-timer (r/atom nil)]
+    (fn [expense]
+      [:li.list-group-item
+       (merge {:style {:cursor "pointer" :user-select "none"}}
+              (on-long-press #(show-edit-entry-modal expense)))
+       [:div.d-flex.justify-content-between
+        [:div
+         [:div.fw-bold (:description expense)]
+         [:small.text-muted (:date expense)]
+         (when (and (:categories expense) (seq (:categories expense)))
+           [:div.text-info.small
+            (clojure.string/join ", " (:categories expense))])]
+        [:div.text-danger (str "-" (format-currency (:amount expense)))]]])))
 
 (defn expense-list []
   (let [expenses (->> (:expenses @app-state)
@@ -210,7 +362,8 @@
    [summary-card]
    [expense-list]
    [add-button]
-   [expense-modal]])
+   [new-entry-modal]
+   [edit-entry-modal]])
 
 (defn- main []
   (swap! app-state assoc
