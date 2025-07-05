@@ -4,7 +4,7 @@
 ;; App state
 (def app-state
   (r/atom {:expenses []
-           :show-modal false
+           :adding-entry? false
            :form {:amount ""
                   :description ""
                   :date ""
@@ -81,18 +81,18 @@
         (save-expenses updated-expenses)
         (swap! app-state assoc
                :expenses updated-expenses
-               :show-modal false
+               :adding-entry? false
                :form {:amount ""
                       :description ""
                       :date (get-today-string)
                       :categories ""})))))
 
 (defn show-modal []
-  (swap! app-state assoc :show-modal true))
+  (swap! app-state assoc :adding-entry? true))
 
 (defn hide-modal []
   (swap! app-state assoc
-         :show-modal false
+         :adding-entry? false
          :form {:amount ""
                 :description ""
                 :date (get-today-string)
@@ -119,7 +119,7 @@
 
 (defn expense-modal []
   (let [form (:form @app-state)
-        show (:show-modal @app-state)]
+        show (:adding-entry? @app-state)]
     [:div
      {:class (str "modal fade" (when show " show"))
       :style {:display (if show "block" "none")
