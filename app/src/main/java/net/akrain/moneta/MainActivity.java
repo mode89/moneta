@@ -1,4 +1,4 @@
-package com.example.helloandroid;
+package net.akrain.moneta;
 
 import android.app.Activity;
 import android.os.Bundle;

@@ -3,8 +3,8 @@ apply plugin: 'com.android.application'
 android {
     compileSdkVersion 32
     defaultConfig {
-        applicationId "com.example.helloandroid"
-        namespace "com.example.helloandroid"
+        applicationId "net.akrain.moneta"
+        namespace "net.akrain.moneta"
         minSdkVersion 21
         targetSdkVersion 32
         versionCode 1
