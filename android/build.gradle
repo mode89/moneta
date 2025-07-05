@@ -2,6 +2,7 @@ apply plugin: 'com.android.application'
 
 android {
     compileSdkVersion 32
+    buildToolsVersion "33.0.2"
     defaultConfig {
         applicationId "net.akrain.moneta"
         namespace "net.akrain.moneta"

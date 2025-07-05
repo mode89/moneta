@@ -8,7 +8,7 @@
 }:
 
 let
-  buildToolsVersion = "30.0.3";
+  buildToolsVersion = "33.0.2";
   androidsdk = (pkgs.androidenv.composeAndroidPackages {
     platformVersions = [ "32" ];
     buildToolsVersions = [ buildToolsVersion ];
