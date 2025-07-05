@@ -4,11 +4,13 @@
 ;; App state
 (def app-state
   (r/atom {:expenses []
-           :adding-entry? false
-           :form {:amount ""
-                  :description ""
-                  :date ""
-                  :categories ""}}))
+           :adding-entry? false}))
+
+(def edited-entry
+  (r/atom {:amount ""
+           :description ""
+           :date ""
+           :categories ""}))
 
 ;; Utility functions
 (defn load-expenses []
@@ -66,8 +68,9 @@
       :else nil)))
 
 ;; Event handlers
-(defn add-expense [form]
-  (let [error (validate-form form)]
+(defn add-expense []
+  (let [form @edited-entry
+        error (validate-form form)]
     (if error
       (js/alert error)
       (let [categories (parse-categories (:categories form))
@@ -82,24 +85,25 @@
         (swap! app-state assoc
                :expenses updated-expenses
                :adding-entry? false
-               :form {:amount ""
-                      :description ""
-                      :date (get-today-string)
-                      :categories ""})))))
+               :categories "")
+        (reset! edited-entry {:amount ""
+                              :description ""
+                              :date (get-today-string)
+                              :categories ""})))))
 
 (defn show-modal []
   (swap! app-state assoc :adding-entry? true))
 
 (defn hide-modal []
   (swap! app-state assoc
-         :adding-entry? false
-         :form {:amount ""
-                :description ""
-                :date (get-today-string)
-                :categories ""}))
+         :adding-entry? false)
+  (reset! edited-entry {:amount ""
+                        :description ""
+                        :date (get-today-string)
+                        :categories ""}))
 
 (defn update-form [field value]
-  (swap! app-state assoc-in [:form field] value))
+  (swap! edited-entry assoc field value))
 
 ;; Components
 (defn summary-card []
@@ -118,7 +122,7 @@
    "+"])
 
 (defn expense-modal []
-  (let [form (:form @app-state)
+  (let [form @edited-entry
         show (:adding-entry? @app-state)]
     [:div
      {:class (str "modal fade" (when show " show"))
@@ -176,7 +180,7 @@
          "Cancel"]
         [:button.btn.btn-primary
          {:type "button"
-          :on-click #(add-expense form)}
+          :on-click #(add-expense)}
          "Save"]]]]]))
 
 (defn expense-item [expense]
@@ -213,11 +217,11 @@
 
 (defn- main []
   (swap! app-state assoc
-         :expenses (load-expenses)
-         :form {:amount ""
-                :description ""
-                :date (get-today-string)
-                :categories ""})
+         :expenses (load-expenses))
+  (reset! edited-entry {:amount ""
+                        :description ""
+                        :date (get-today-string)
+                        :categories ""})
   (rdom/render [app] (.getElementById js/document "app")))
 
 (main)
