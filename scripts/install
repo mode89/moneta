@@ -5,4 +5,4 @@ SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 WORK_DIR=$(realpath "${SCRIPT_DIR}/..")
 
 cd "${WORK_DIR}"
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r android/build/outputs/apk/debug/android-debug.apk
