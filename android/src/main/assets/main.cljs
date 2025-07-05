@@ -44,7 +44,7 @@
   (js/Date. (.getFullYear date) (.getMonth date) (.getDate date)))
 
 (defn parse-categories [categories-str]
-  (->> (.split categories-str ",")
+  (->> (.split categories-str " ")
        (map #(.trim %))
        (filter #(not= % ""))))
 
@@ -73,19 +73,17 @@
         error (validate-form form)]
     (if error
       (js/alert error)
-      (let [categories (parse-categories (:categories form))
-            new-expense {:id (.now js/Date)
+      (let [new-expense {:id (.now js/Date)
                          :amount (js/parseFloat (:amount form))
                          :description (:description form)
                          :date (:date form)
-                         :categories categories}
+                         :categories (parse-categories (:categories form))}
             current-expenses (:expenses @app-state)
             updated-expenses (conj current-expenses new-expense)]
         (save-expenses updated-expenses)
         (swap! app-state assoc
                :expenses updated-expenses
-               :adding-entry? false
-               :categories "")
+               :adding-entry? false)
         (reset! edited-entry {:amount ""
                               :description ""
                               :date (get-today-string)
@@ -95,8 +93,7 @@
   (swap! app-state assoc :adding-entry? true))
 
 (defn hide-modal []
-  (swap! app-state assoc
-         :adding-entry? false)
+  (swap! app-state assoc :adding-entry? false)
   (reset! edited-entry {:amount ""
                         :description ""
                         :date (get-today-string)
@@ -165,11 +162,11 @@
             :on-change #(update-form :date (-> % .-target .-value))}]]
          [:div.mb-3
           [:label.form-label {:for "expenseCategories"}
-           "Categories (comma-separated)"]
+           "Categories"]
           [:input.form-control
            {:id "expenseCategories"
             :type "text"
-            :placeholder "e.g., Food, Shopping"
+            :placeholder "e.g. food shopping"
             :value (:categories form)
             :on-change #(update-form :categories
                           (-> % .-target .-value))}]]]]
@@ -190,7 +187,7 @@
      [:div.fw-bold (:description expense)]
      [:small.text-muted (:date expense)]
      (when (and (:categories expense) (seq (:categories expense)))
-       [:div.text-info.small "Categories: "
+       [:div.text-info.small
         (clojure.string/join ", " (:categories expense))])]
     [:div.text-danger (str "-" (format-currency (:amount expense)))]]])
 
