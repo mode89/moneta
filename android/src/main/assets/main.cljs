@@ -128,7 +128,7 @@
      [:div.modal-dialog.modal-dialog-centered
       [:div.modal-content
        [:div.modal-header
-        [:h5.modal-title "Add New Expense"]
+        [:h5.modal-title "New Expense"]
         [:button.btn-close
          {:type "button"
           :on-click hide-modal}]]
@@ -177,7 +177,7 @@
         [:button.btn.btn-primary
          {:type "button"
           :on-click #(add-expense form)}
-         "Save Expense"]]]]]))
+         "Save"]]]]]))
 
 (defn expense-item [expense]
   [:li.list-group-item
