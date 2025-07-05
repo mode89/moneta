@@ -16,9 +16,16 @@ let
     includeEmulator = true;
     includeSystemImages = true;
   }).androidsdk;
+  elm = let
+      # 2025-07-05
+      pkgs' = import (fetchTarball
+        ("https://github.com/NixOS/nixpkgs/archive/" +
+        "1161c1470c91344224bd8df9979768e5c9fd0e7d.tar.gz")) {};
+    in pkgs'.elmPackages.elm;
 in pkgs.mkShell {
   packages = with pkgs; [
     androidsdk
+    elm
     gradle_8
   ];
   shellHook = ''
