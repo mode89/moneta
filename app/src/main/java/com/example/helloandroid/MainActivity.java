@@ -11,6 +11,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Remove title bar
+        requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
 
         // Create a WebView programmatically
         WebView webView = new WebView(this);
@@ -19,7 +21,9 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT));
 
         WebSettings webSettings = webView.getSettings();
-        webSettings.setJavaScriptEnabled(true); // Enable JavaScript if needed
+        webSettings.setJavaScriptEnabled(true);
+        webSettings.setDomStorageEnabled(true);
+        webSettings.setAllowUniversalAccessFromFileURLs(true);
 
         // Load HTML content
         webView.loadUrl("file:///android_asset/index.html");
