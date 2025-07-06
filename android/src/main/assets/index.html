@@ -10,22 +10,9 @@
       crossorigin="anonymous">
 
     <script
-      src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"
-      integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z"
-      crossorigin>
-    </script>
-    <script
-      src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"
-      integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1"
-      crossorigin>
-    </script>
-    <script src="https://cdn.jsdelivr.net/npm/scittle@0.7.23/dist/scittle.js"
-      integrity="sha384-VmL8Bv9Dc1yD4qgd9qKq6MvokhQ+IPGcki0mgW8yT25pD+YEfbNBTnpX6XDEAYJL"
-      crossorigin>
-    </script>
-    <script src="https://cdn.jsdelivr.net/npm/scittle@0.7.23/dist/scittle.reagent.js"
-      integrity="sha384-V3baXfL7viBTG8J6eMZizDrw1YkUFyjkl5xejbJtDcd5zv7lcAs7fcMKVMu/k2NL"
-      crossorigin>
+      src="https://cdn.jsdelivr.net/npm/sodiumjs@3.0.7/dist/sodium.umd.min.js"
+      integrity="sha256-aSONxDZwXhlV34Z8fumNsuFEp4Gt2Y0lUIIkuj9+bpQ="
+      crossorigin="anonymous">
     </script>
 
     <style>
@@ -47,7 +34,113 @@
     </style>
   </head>
   <body>
-    <div id="app"></div>
-    <script src="main.cljs" type="application/x-scittle"></script>
+    <div id="app" class="container mt-4">
+      <div id="summary"></div>
+      <div id="new-expense"></div>
+    </div>
+
+    <template id="summary-template">
+      <div class="card mb-4">
+        <div class="card-body">
+          <h2 data-id="title" class="card-title">&lt;empty&gt;</h2>
+          <p class="card-text fs-3">
+            Total Spent:
+            <span
+              data-id="total"
+              style="color: #dc3545;">
+              &lt;empty&gt;
+            </span>
+          </p>
+        </div>
+      </div>
+    </template>
+
+    <template id="new-expense-template">
+      <div
+        class="modal fade show"
+        style="display: block; background-color: rgba(0,0,0,0.5);"
+        tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">New Expense</h5>
+              <button
+                data-id="cross"
+                type="button"
+                class="btn-close">
+              </button>
+            </div>
+            <div class="modal-body">
+              <form>
+                <div class="mb-3">
+                  <label for="expenseAmount" class="form-label">
+                    Amount
+                  </label>
+                  <input
+                    data-id="amount"
+                    type="number"
+                    class="form-control"
+                    placeholder="0.00"
+                    step="0.01"
+                    value="{{form.amount}}"
+                    onchange="updateForm(amount, this.value)">
+                </div>
+                <div class="mb-3">
+                  <label for="expenseDescription" class="form-label">
+                    Description
+                  </label>
+                  <input
+                    data-id="description"
+                    type="text"
+                    class="form-control"
+                    placeholder="e.g., Groceries, Dinner"
+                    value="{{form.description}}"
+                    onchange="updateForm(description, this.value)">
+                </div>
+                <div class="mb-3">
+                  <label for="expenseDate" class="form-label">Date</label>
+                  <input
+                    data-id="date"
+                    type="date"
+                    class="form-control"
+                    value="{{form.date}}"
+                    onchange="updateForm(date, this.value)">
+                </div>
+                <div class="mb-3">
+                  <label for="expenseCategories" class="form-label">
+                    Categories
+                  </label>
+                  <input
+                    data-id="categories"
+                    type="text"
+                    class="form-control"
+                    placeholder="e.g. food shopping"
+                    value="{{form.categories}}"
+                    onchange="updateForm(categories, this.value)">
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button
+                data-id="cancel"
+                type="button"
+                class="btn btn-secondary"
+                onclick="hideNewEntryModal()">
+                  Cancel
+              </button>
+              <button
+                data-id="save"
+                type="button"
+                class="btn btn-primary"
+                onclick="addExpense()">
+                  Save
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <script src="main.js" type="text/javascript"></script>
   </body>
 </html>
