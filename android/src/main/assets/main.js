@@ -230,7 +230,18 @@ function NewEntryModal() {
           React.createElement("button", {
               type: "button",
               className: "btn btn-primary",
-              onClick: () => addExpense(newEntry, setState),
+              onClick: () => {
+                const expense = handleNewEntry(newEntry);
+                if (expense !== null) {
+                  const expenses = [ ..._state.expenses, expense ];
+                  setState(prev => ({
+                    ...prev,
+                    expenses: expenses,
+                    showModal: false,
+                  }));
+                  saveExpenses(expenses);
+                }
+              },
             },
             "Save"
           )
@@ -252,10 +263,19 @@ function loadExpenses() {
   }
 }
 
-function addExpense(newEntry, setState) {
-  const amount = parseFloat(newEntry.amount);
-  const description = newEntry.description.trim();
-  const date = beginningOfDay(newEntry.date);
+function saveExpenses(expenses) {
+  localStorage.setItem("expenses", JSON.stringify(
+    expenses.map(expense => ({
+      ...expense,
+      date: formatDate(expense.date),
+    }))
+  ));
+}
+
+function handleNewEntry(entry) {
+  const amount = parseFloat(entry.amount);
+  const description = entry.description.trim();
+  const date = beginningOfDay(entry.date);
 
   if (amount <= 0 || isNaN(amount)) {
     alert("Please enter a valid amount.");
@@ -266,24 +286,17 @@ function addExpense(newEntry, setState) {
   } else if (date > beginningOfDay(new Date())) {
     alert("Date cannot be in the future.");
   } else {
-    setState(prev => ({
-      ...prev,
-      expenses: [
-        ...prev.expenses,
-        {
-          // Unique ID based on timestamp
-          id: new Date().getTime(),
-          amount: amount,
-          description: description,
-          date: date,
-          categories: newEntry.categories
-            .split(/\s+/)
-            .filter(cat => cat)
-            .sort(),
-        },
-      ],
-      showModal: false,
-    }));
+    return {
+      // Unique ID based on timestamp
+      id: new Date().getTime(),
+      amount: amount,
+      description: description,
+      date: date,
+      categories: entry.categories
+        .split(/\s+/)
+        .filter(cat => cat)
+        .sort(),
+    };
   }
 }
 
