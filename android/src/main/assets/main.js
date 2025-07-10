@@ -6,13 +6,7 @@ const r = window.React;
 const rdom = window.ReactDOM;
 
 state = jotai.atom({
-  expenses: [{
-    id: 1,
-    amount: 42.0,
-    description: "Dummy",
-    date: new Date("2023-10-01"),
-    categories: ["dummy", "test"],
-  }],
+  expenses: loadExpenses(),
   showModal: false,
 });
 
@@ -244,6 +238,18 @@ function NewEntryModal() {
       )
     )
   );
+}
+
+function loadExpenses() {
+  stored = localStorage.getItem("expenses");
+  if (stored) {
+    return JSON.parse(stored).map(expense => ({
+      ...expense,
+      date: new Date(expense.date),
+    }));
+  } else {
+    return [];
+  }
 }
 
 function addExpense(newEntry, setState) {
