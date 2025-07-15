@@ -518,6 +518,7 @@ function transformExpense(expense) {
     categories: expense.categories
       .split(/\s+/)
       .filter(cat => cat)
+      .map(cat => cat.toLowerCase())
       .sort(),
   };
 }
