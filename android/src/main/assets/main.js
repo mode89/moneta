@@ -7,7 +7,7 @@ const rdom = window.ReactDOM;
 
 state = jotai.atom({
   expenses: loadExpenses(),
-  showModal: false,
+  editingNewEntry: false,
 });
 
 function main() {
@@ -18,7 +18,7 @@ function main() {
         r.createElement(SummaryCard, null),
         r.createElement(ExpenseList, null),
         r.createElement(NewEntryButton, null),
-        _state.showModal && r.createElement(NewEntryModal, null)
+        _state.editingNewEntry && r.createElement(NewEntryModal, null)
       );
     }));
 }
@@ -99,7 +99,7 @@ function NewEntryButton() {
     {
       className: "btn btn-primary btn-lg rounded-circle fixed-bottom-right",
       style: { zIndex: 1000 },
-      onClick: () => setState(prev => ({ ...prev, showModal: true })),
+      onClick: () => setState(prev => ({ ...prev, editingNewEntry: true })),
     },
     "+"
   );
@@ -132,7 +132,7 @@ function NewEntryModal() {
               type: "button",
               className: "btn-close",
               onClick: () => {
-                setState(prev => ({ ...prev, showModal: false }));
+                setState(prev => ({ ...prev, editingNewEntry: false }));
               },
             }
           )
@@ -222,7 +222,7 @@ function NewEntryModal() {
               type: "button",
               className: "btn btn-secondary",
               onClick: () => {
-                setState(prev => ({ ...prev, showModal: false }));
+                setState(prev => ({ ...prev, editingNewEntry: false }));
               }
             },
             "Cancel"
@@ -237,7 +237,7 @@ function NewEntryModal() {
                   setState(prev => ({
                     ...prev,
                     expenses: expenses,
-                    showModal: false,
+                    editingNewEntry: false,
                   }));
                   saveExpenses(expenses);
                 }
