@@ -9,6 +9,7 @@ const appState = jotai.atom({
   expenses: loadExpenses(),
   addingExpense: false,
   editingExpenseId: null,
+  showNumbers: false,
 });
 
 function main() {
@@ -28,17 +29,27 @@ function main() {
 }
 
 function SummaryCard() {
-  const [app] = jotai.useAtom(appState);
+  const [app, setApp] = jotai.useAtom(appState);
   const total = app.expenses
     .reduce((sum, expense) => sum + expense.amount, 0);
 
   return r.createElement("div", { className: "card mb-4" },
     r.createElement("div", { className: "card-body" },
       r.createElement("h2", { className: "card-title" }, getCurrentMonth()),
-      r.createElement("p", { className: "card-text fs-3" },
+      r.createElement("p",
+        { className: "card-text fs-3",
+          onClick: () => setApp(
+            prev => ({ ...prev, showNumbers: !prev.showNumbers })
+          ),
+          style: { cursor: "pointer" },
+        },
         "Total Spent: ",
         r.createElement("span", { style: { color: "#dc3545" } },
-          formatCurrency(total))
+          app.showNumbers
+            ? formatCurrency(total)
+            : r.createElement("span", { className: "blur-text" },
+                formatCurrency(total))
+          )
       ),
     )
   );
@@ -95,8 +106,19 @@ function ExpenseItem({ expense }) {
           expense.categories.slice().sort().join(", ")
         )
     ),
-    r.createElement("span", { className: "text-danger" },
-      "-" + formatCurrency(expense.amount)
+    r.createElement("span",
+      {
+        className: "text-danger",
+        onClick: (e) => {
+          e.stopPropagation();
+          setApp(prev => ({ ...prev, showNumbers: !prev.showNumbers }));
+        },
+      },
+      app.showNumbers
+        ? ("-" + formatCurrency(expense.amount))
+        : r.createElement("span", { className: "blur-text" },
+            "-" + formatCurrency(expense.amount)
+          )
     )
   );
 }
