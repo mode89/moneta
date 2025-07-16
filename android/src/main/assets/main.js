@@ -62,8 +62,24 @@ function ExpenseList() {
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
   return r.createElement("div", { className: "card mt-4 custom-mb-100" },
-    r.createElement("div", { className: "card-header" },
+    r.createElement("div",
+      {
+        className: "card-header d-flex justify-content-between " +
+          "align-items-center"
+      },
       r.createElement("h3", { className: "mb-0" }, "Expenses"),
+      r.createElement("button",
+        {
+          className: "btn btn-outline-secondary btn-sm",
+          onClick: exportExpenses,
+          title: "Export Expenses",
+        },
+        r.createElement("img", {
+          src: "thirdparty/material-design/download.svg",
+          alt: "Export",
+          style: { width: "24px", height: "24px" },
+        })
+      )
     ),
     r.createElement("ul", { className: "list-group list-group-flush" },
       expenses.length === 0
@@ -483,12 +499,37 @@ function loadExpenses() {
 }
 
 function saveExpenses(expenses) {
-  localStorage.setItem("expenses", JSON.stringify(
+  localStorage.setItem("expenses", jsonFromExpenses(expenses));
+}
+
+function exportExpenses() {
+  const expenses = loadExpenses();
+  const json = jsonFromExpenses(expenses);
+  const filename = `moneta-${formatDate(new Date())}.json`;
+
+  if (typeof Android !== 'undefined' && Android.createFile) {
+    Android.createFile(filename, json);
+  } else {
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+}
+
+function jsonFromExpenses(expenses) {
+  return JSON.stringify(
     expenses.map(expense => ({
       ...expense,
       date: formatDate(expense.date),
-    }))
-  ));
+    })),
+    null, 2
+  );
 }
 
 function validateExpense(expense) {
