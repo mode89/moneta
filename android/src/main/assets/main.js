@@ -1,9 +1,13 @@
 const jotai = {
   atom: window.jotaiVanilla.atom,
+  createStore: window.jotaiVanilla.createStore,
+  getDefaultStore: window.jotaiVanilla.getDefaultStore,
   useAtom: window.jotaiReact.useAtom,
 };
 const r = window.React;
 const rdom = window.ReactDOM;
+
+const store = jotai.getDefaultStore();
 
 const appState = jotai.atom({
   expenses: loadExpenses(),
@@ -13,6 +17,7 @@ const appState = jotai.atom({
 });
 
 function main() {
+  console.log("Initializing web application ...");
   rdom.createRoot(document.getElementById("app"))
     .render(r.createElement(() => {
       const [app, setApp] = jotai.useAtom(appState);
@@ -68,17 +73,31 @@ function ExpenseList() {
           "align-items-center"
       },
       r.createElement("h3", { className: "mb-0" }, "Expenses"),
-      r.createElement("button",
-        {
-          className: "btn btn-outline-secondary btn-sm",
-          onClick: exportExpenses,
-          title: "Export Expenses",
-        },
-        r.createElement("img", {
-          src: "thirdparty/material-design/download.svg",
-          alt: "Export",
-          style: { width: "24px", height: "24px" },
-        })
+      r.createElement("div", null,
+        r.createElement("button",
+          {
+            className: "btn btn-outline-secondary btn-sm",
+            onClick: importExpenses,
+            title: "Import Expenses",
+          },
+          r.createElement("img", {
+            src: "thirdparty/material-design/download.svg",
+            alt: "Import",
+            style: { width: "24px", height: "24px" },
+          })
+        ),
+        r.createElement("button",
+          {
+            className: "btn btn-outline-secondary btn-sm ms-2",
+            onClick: exportExpenses,
+            title: "Export Expenses",
+          },
+          r.createElement("img", {
+            src: "thirdparty/material-design/upload.svg",
+            alt: "Export",
+            style: { width: "24px", height: "24px" },
+          })
+        )
       )
     ),
     r.createElement("ul", { className: "list-group list-group-flush" },
@@ -499,6 +518,7 @@ function loadExpenses() {
 }
 
 function saveExpenses(expenses) {
+  console.log("Saving expenses to local storage");
   localStorage.setItem("expenses", jsonFromExpenses(expenses));
 }
 
@@ -519,6 +539,65 @@ function exportExpenses() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  }
+}
+
+function importExpenses() {
+  console.log("Importing expenses...");
+
+  if (typeof Android !== 'undefined' && Android.pickFile) {
+    console.log("Importing expenses via Android.pickFile");
+    Android.pickFile(importExpensesFrom);
+  } else {
+    console.log("Importing expenses via file input (not Android)");
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          importExpensesFrom(event.target.result);
+        };
+        reader.readAsText(file);
+      }
+    };
+    input.click();
+  }
+}
+
+function importExpensesFrom(content) {
+  try {
+    const setApp = (callback) => store.set(appState, callback);
+
+    console.log("Parsing imported expenses JSON");
+    const importedExpenses = JSON.parse(content)
+      .map(expense => ({
+        id: expense.id,
+        amount: parseFloat(expense.amount),
+        description: expense.description,
+        date: new Date(expense.date),
+        categories: expense.categories,
+      }));
+
+    const validationErrors = importedExpenses
+      .map(validateExpense)
+      .filter(error => error !== null);
+
+    if (validationErrors.length > 0) {
+      alert("Validation errors found:\n" +
+        validationErrors.join("\n"));
+      return;
+    }
+
+    setApp(prev => ({
+      ...prev,
+      expenses: importedExpenses,
+    }));
+    saveExpenses(importedExpenses);
+  } catch (e) {
+    alert("Failed to import expenses: " + e.message);
   }
 }
 
