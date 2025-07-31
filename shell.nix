@@ -22,6 +22,7 @@ in pkgs.mkShell {
     (gradle_8.override {
       java = pkgs.jdk17;
     })
+    nodejs
   ];
   shellHook = ''
     export ANDROID_SDK_ROOT=${androidsdk}/libexec/android-sdk

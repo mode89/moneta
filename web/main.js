@@ -1,15 +1,10 @@
-const jotai = {
-  atom: window.jotaiVanilla.atom,
-  createStore: window.jotaiVanilla.createStore,
-  getDefaultStore: window.jotaiVanilla.getDefaultStore,
-  useAtom: window.jotaiReact.useAtom,
-};
-const r = window.React;
-const rdom = window.ReactDOM;
+import * as Jotai from "jotai";
+import * as React from "react";
+import * as ReactDOM from "react-dom/client";
 
-const store = jotai.getDefaultStore();
+const store = Jotai.getDefaultStore();
 
-const appState = jotai.atom({
+const appState = Jotai.atom({
   expenses: loadExpenses(),
   addingExpense: false,
   editingExpenseId: null,
@@ -18,15 +13,15 @@ const appState = jotai.atom({
 
 function main() {
   console.log("Initializing web application ...");
-  rdom.createRoot(document.getElementById("app"))
-    .render(r.createElement(() => {
-      const [app, setApp] = jotai.useAtom(appState);
-      return r.createElement("div", { className: "container mt-4" },
-        r.createElement(SummaryCard, null),
-        r.createElement(ExpenseList, null),
-        r.createElement(NewExpenseButton, null),
-        app.addingExpense && r.createElement(NewExpenseModal, null),
-        app.editingExpenseId !== null && r.createElement(EditExpenseModal, {
+  ReactDOM.createRoot(document.getElementById("app"))
+    .render(React.createElement(() => {
+      const [app, setApp] = Jotai.useAtom(appState);
+      return React.createElement("div", { className: "container mt-4" },
+        React.createElement(SummaryCard, null),
+        React.createElement(ExpenseList, null),
+        React.createElement(NewExpenseButton, null),
+        app.addingExpense && React.createElement(NewExpenseModal, null),
+        app.editingExpenseId !== null && React.createElement(EditExpenseModal, {
           expenseId: app.editingExpenseId
         })
       );
@@ -34,14 +29,14 @@ function main() {
 }
 
 function SummaryCard() {
-  const [app, setApp] = jotai.useAtom(appState);
+  const [app, setApp] = Jotai.useAtom(appState);
   const total = app.expenses
     .reduce((sum, expense) => sum + expense.amount, 0);
 
-  return r.createElement("div", { className: "card mb-4" },
-    r.createElement("div", { className: "card-body" },
-      r.createElement("h2", { className: "card-title" }, getCurrentMonth()),
-      r.createElement("p",
+  return React.createElement("div", { className: "card mb-4" },
+    React.createElement("div", { className: "card-body" },
+      React.createElement("h2", { className: "card-title" }, getCurrentMonth()),
+      React.createElement("p",
         { className: "card-text fs-3",
           onClick: () => setApp(
             prev => ({ ...prev, showNumbers: !prev.showNumbers })
@@ -49,10 +44,10 @@ function SummaryCard() {
           style: { cursor: "pointer" },
         },
         "Total Spent: ",
-        r.createElement("span", { style: { color: "#dc3545" } },
+        React.createElement("span", { style: { color: "#dc3545" } },
           app.showNumbers
             ? formatCurrency(total)
-            : r.createElement("span", { className: "blur-text" },
+            : React.createElement("span", { className: "blur-text" },
                 formatCurrency(total))
           )
       ),
@@ -61,62 +56,62 @@ function SummaryCard() {
 }
 
 function ExpenseList() {
-  const [app, setApp] = jotai.useAtom(appState);
+  const [app, setApp] = Jotai.useAtom(appState);
   const expenses = app.expenses
     .slice()
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  return r.createElement("div", { className: "card mt-4 custom-mb-100" },
-    r.createElement("div",
+  return React.createElement("div", { className: "card mt-4 custom-mb-100" },
+    React.createElement("div",
       {
         className: "card-header d-flex justify-content-between " +
           "align-items-center"
       },
-      r.createElement("h3", { className: "mb-0" }, "Expenses"),
-      r.createElement("div", null,
-        r.createElement("button",
+      React.createElement("h3", { className: "mb-0" }, "Expenses"),
+      React.createElement("div", null,
+        React.createElement("button",
           {
             className: "btn btn-outline-secondary btn-sm",
             onClick: importExpenses,
             title: "Import Expenses",
           },
-          r.createElement("img", {
-            src: "thirdparty/material-design/download.svg",
+          React.createElement("img", {
+            src: "file_download.svg",
             alt: "Import",
             style: { width: "24px", height: "24px" },
           })
         ),
-        r.createElement("button",
+        React.createElement("button",
           {
             className: "btn btn-outline-secondary btn-sm ms-2",
             onClick: exportExpenses,
             title: "Export Expenses",
           },
-          r.createElement("img", {
-            src: "thirdparty/material-design/upload.svg",
+          React.createElement("img", {
+            src: "file_upload.svg",
             alt: "Export",
             style: { width: "24px", height: "24px" },
           })
         )
       )
     ),
-    r.createElement("ul", { className: "list-group list-group-flush" },
+    React.createElement("ul", { className: "list-group list-group-flush" },
       expenses.length === 0
-        ? r.createElement("li",
+        ? React.createElement("li",
             { className: "list-group-item text-muted text-center" },
             "No expenses yet"
           )
         : expenses.map(expense =>
-            r.createElement(ExpenseItem, { key: expense.id, expense })
+            React.createElement(ExpenseItem, { key: expense.id, expense })
           )
     )
   );
 }
 
 function ExpenseItem({ expense }) {
-  const [app, setApp] = jotai.useAtom(appState);
+  const [app, setApp] = Jotai.useAtom(appState);
 
-  return r.createElement("li",
+  return React.createElement("li",
     {
       className:
         "list-group-item " +
@@ -128,20 +123,20 @@ function ExpenseItem({ expense }) {
         setApp(prev => ({ ...prev, editingExpenseId: expense.id }));
       },
     },
-    r.createElement(
+    React.createElement(
       "div",
       null,
-      r.createElement("strong", null, expense.description),
-      r.createElement("br", null),
-      r.createElement("small", { className: "text-muted" },
+      React.createElement("strong", null, expense.description),
+      React.createElement("br", null),
+      React.createElement("small", { className: "text-muted" },
         formatDate(expense.date)
       ),
       expense.categories.length > 0 &&
-        r.createElement("div", { className: "text-info small" },
+        React.createElement("div", { className: "text-info small" },
           expense.categories.slice().sort().join(", ")
         )
     ),
-    r.createElement("span",
+    React.createElement("span",
       {
         className: "text-danger",
         onClick: (e) => {
@@ -151,7 +146,7 @@ function ExpenseItem({ expense }) {
       },
       app.showNumbers
         ? ("-" + formatCurrency(expense.amount))
-        : r.createElement("span", { className: "blur-text" },
+        : React.createElement("span", { className: "blur-text" },
             "-" + formatCurrency(expense.amount)
           )
     )
@@ -159,8 +154,8 @@ function ExpenseItem({ expense }) {
 }
 
 function NewExpenseButton() {
-  const [app, setApp] = jotai.useAtom(appState);
-  return r.createElement(
+  const [app, setApp] = Jotai.useAtom(appState);
+  return React.createElement(
     "button",
     {
       className: "btn btn-primary btn-lg rounded-circle fixed-bottom-right",
@@ -172,8 +167,8 @@ function NewExpenseButton() {
 }
 
 function NewExpenseModal() {
-  const [app, setApp] = jotai.useAtom(appState);
-  const [newEntry, setNewEntry] = r.useState({
+  const [app, setApp] = Jotai.useAtom(appState);
+  const [newEntry, setNewEntry] = React.useState({
     amount: "",
     description: "",
     date: new Date(),
@@ -324,8 +319,8 @@ function NewExpenseModal() {
 }
 
 function EditExpenseModal({ expenseId }) {
-  const [app, setApp] = jotai.useAtom(appState);
-  const [expense, setExpense] = r.useState(() => {
+  const [app, setApp] = Jotai.useAtom(appState);
+  const [expense, setExpense] = React.useState(() => {
     const _expense = app.expenses.find(exp => exp.id === expenseId);
     if (!_expense) {
       alert("Expense not found.");
@@ -543,7 +538,7 @@ function exportExpenses() {
 }
 
 function importExpenses() {
-  console.log("Importing expenses...");
+  console.log("Importing expenses ...");
 
   if (typeof Android !== 'undefined' && Android.pickFile) {
     console.log("Importing expenses via Android.pickFile");
