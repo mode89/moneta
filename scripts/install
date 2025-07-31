@@ -4,5 +4,9 @@ set -e
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 WORK_DIR=$(realpath "${SCRIPT_DIR}/..")
 
+echo
+echo "===================== Installing Android app ======================="
+echo
+
 cd "${WORK_DIR}"
 adb install -r android/build/outputs/apk/debug/android-debug.apk
