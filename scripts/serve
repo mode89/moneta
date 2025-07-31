@@ -4,5 +4,5 @@ set -e
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 WORK_DIR=$(realpath "${SCRIPT_DIR}/..")
 
-cd ${WORK_DIR}/android/src/main/assets
+cd ${WORK_DIR}/android/src/main/assets/web
 python3 -m http.server 8080

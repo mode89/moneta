@@ -43,7 +43,7 @@ public class MainActivity extends Activity {
             new JavaScriptInterface(this), "Android");
 
         // Load HTML content
-        webView.loadUrl("file:///android_asset/index.html");
+        webView.loadUrl("file:///android_asset/web/index.html");
 
         // Set a WebChromeClient to handle console messages
         webView.setWebChromeClient(new WebChromeClient() {
