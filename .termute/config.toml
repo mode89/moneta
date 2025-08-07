@@ -1,6 +1,6 @@
 ignored-files = [
   "android/build/**",
-  "android/src/main/assets/thirdparty/**",
-  "android/src/main/res/drawable/coin.png",
+  "android/src/main/assets/web/**",
+  "android/src/main/res/drawable/**",
   "build/**",
 ]

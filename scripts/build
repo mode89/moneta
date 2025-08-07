@@ -13,24 +13,32 @@ echo
 echo "======================== Building Web app =========================="
 echo
 
+rm -rf ${WEB_BUILD_DIR}
 mkdir -p ${WEB_BUILD_DIR}
 cd ${WEB_DIR}
 npm install
-npx esbuild --bundle --outdir=${WEB_BUILD_DIR} main.js
+
+rm -rf ${WEB_BUILD_DIR}/dist
+mkdir -p ${WEB_BUILD_DIR}/dist
+cp \
+    index.html \
+    main.cljs \
+    node_modules/bootstrap/dist/css/bootstrap.css \
+    node_modules/react/umd/react.production.min.js \
+    node_modules/react-dom/umd/react-dom.production.min.js \
+    node_modules/scittle/dist/scittle.js \
+    node_modules/scittle/dist/scittle.reagent.js \
+    ${MDI_DIR}/file_download.svg \
+    ${MDI_DIR}/file_upload.svg \
+    ${WEB_BUILD_DIR}/dist
 
 echo
 echo "====================== Building Android app ========================"
 echo
 
 # Include web app into Android project
-mkdir -p ${ANDROID_ASSETS_DIR}/web
-cp \
-    index.html \
-    ${WEB_DIR}/node_modules/bootstrap/dist/css/bootstrap.css \
-    ${MDI_DIR}/file_download.svg \
-    ${MDI_DIR}/file_upload.svg \
-    ${WEB_BUILD_DIR}/main.js \
-    ${ANDROID_ASSETS_DIR}/web
+rm -rf ${ANDROID_ASSETS_DIR}/web
+cp -r ${WEB_BUILD_DIR}/dist ${ANDROID_ASSETS_DIR}/web
 
 cd "${WORK_DIR}"
 gradle \
