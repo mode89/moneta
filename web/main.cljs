@@ -53,10 +53,10 @@
    [:div.card-body
     [:h2.card-title
      (.toLocaleString (now) "default" #js{:month "long"})]
-    [:p.card-text.fs-3
+    [:p.card-text.fs-3.d-flex.justify-content-between
      {:on-click #(swap! app-state update :show-numbers? not)
       :style {:cursor "pointer"}}
-     "Total Spent: "
+     [:span "Total Spent:"]
      [:span {:style {:color "#dc3545"}}
       (let [year (.getFullYear (now))
             month (.getMonth (now))
