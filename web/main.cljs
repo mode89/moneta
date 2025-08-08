@@ -7,6 +7,7 @@
 (declare
   summary-card
   expense-list
+  daily-expense-list
   expense-item
   new-expense-button
   new-expense-modal
@@ -90,8 +91,29 @@
    [:ul.list-group.list-group-flush
     (if (empty? (:expenses @app-state))
       [:li.list-group-item.text-muted.text-center "No expenses yet"]
-      (map #(vector expense-item %)
-           (sort-by :date > (:expenses @app-state))))]])
+      (let [grouped-expenses (group-by
+                               #(-> % :date beginning-of-day)
+                               (:expenses @app-state))
+            sorted-dates (sort-by identity > (keys grouped-expenses))]
+        (map (fn [date]
+               [daily-expense-list date (get grouped-expenses date)])
+             sorted-dates)))]])
+
+(defn daily-expense-list [date expenses]
+  (let [total-amount (reduce + 0 (map :amount expenses))]
+    [:li.list-group-item.bg-light.p-0
+     {:style {:list-style-type "none"}}
+     [:ul.list-group.list-group-flush
+      [:li.list-group-item.bg-light
+       [:strong.d-flex.justify-content-between
+        {:on-click #(swap! app-state update :show-numbers? not)
+         :style {:cursor "pointer"}}
+        [:span (format-date date)]
+        [:span
+         (if (:show-numbers? @app-state)
+           (format-currency total-amount)
+           [:span.blur-text (format-currency total-amount)])]]]
+      (map #(vector expense-item %) (sort-by :id > expenses))]]))
 
 (defn expense-item [expense]
   [:li.list-group-item.d-flex.justify-content-between.align-items-center
