@@ -31,7 +31,8 @@
     {:expenses []
      :adding-expense? false
      :editing-expense nil
-     :show-numbers? false}))
+     :show-numbers? false
+     :bubble nil}))
 
 (defn app []
   [:div.container.mt-4
@@ -41,7 +42,11 @@
    (when (:adding-expense? @app-state)
      [new-expense-modal])
    (when (:editing-expense @app-state)
-     [edit-expense-modal (:editing-expense @app-state)])])
+     [edit-expense-modal (:editing-expense @app-state)])
+   (when-let [message (:bubble @app-state)]
+     [:div.bubble.alert.alert-success.show
+      {:role "alert"}
+      message])])
 
 (defn summary-card []
   [:div.card.mb-4
@@ -426,7 +431,11 @@
        :expenses
        json-expenses
        (js/localStorage.setItem "expenses"))
-  (println "Expenses saved to local storage."))
+  (println "Expenses saved to local storage.")
+  (swap! app-state assoc :bubble "Saved")
+  (js/setTimeout
+    #(swap! app-state assoc :bubble nil)
+    3000))
 
 (defn parse-json-expenses [json]
   (as-> json $
