@@ -58,7 +58,14 @@
       :style {:cursor "pointer"}}
      "Total Spent: "
      [:span {:style {:color "#dc3545"}}
-      (let [total (reduce + (map :amount (:expenses @app-state)))]
+      (let [year (.getFullYear (now))
+            month (.getMonth (now))
+            total (->> @app-state
+                       :expenses
+                       (filter #(and (= year (.getFullYear (:date %)))
+                                     (= month (.getMonth (:date %)))))
+                       (map :amount)
+                       (reduce + 0))]
         (if (:show-numbers? @app-state)
           (format-currency total)
           [:span.blur-text (format-currency total)]))]]]])
