@@ -21,6 +21,7 @@
   get-current-month
   format-currency
   format-date
+  now
   js-date
   beginning-of-day
   find-first
@@ -185,7 +186,7 @@
 (defn new-expense-modal []
   (let [expense (r/atom {:amount ""
                          :description ""
-                         :date (js-date)
+                         :date (now)
                          :categories ""})]
     #(new-expense-modal* expense)))
 
@@ -203,12 +204,12 @@
       (not (instance? js/Date date))
       "Invalid date."
 
-      (> (.getTime date) (.getTime (js-date)))
+      (> (.getTime date) (.getTime (now)))
       "Date cannot be in the future.")))
 
 (defn new-expense-save [expense]
   (swap! app-state update :expenses conj
-    {:id (.getTime (js-date))
+    {:id (.getTime (now))
      :amount (-> expense :amount js/parseFloat)
      :description (-> expense :description string/trim)
      :date (-> expense :date js-date)
@@ -334,7 +335,7 @@
 (defn export-expenses []
   (let [expenses (:expenses @app-state)
         json (json-expenses expenses)
-        filename (str "moneta-" (format-date (js-date)) ".json")]
+        filename (str "moneta-" (format-date (now)) ".json")]
     (if (some? js/Android)
       (js/Android.createFile filename json)
       (let [blob (js/Blob. #js[json] #js{:type "application/json"})
@@ -384,7 +385,7 @@
                           (string/blank? (:description %))
                           "Empty description."
 
-                          (> (.getTime (:date %)) (.getTime (js-date)))
+                          (> (.getTime (:date %)) (.getTime (now)))
                           "Date cannot be in the future."))
                       (filter some?))]
       (if (seq errors)
@@ -412,7 +413,7 @@
       (not (instance? js/Date date))
       "Invalid date."
 
-      (> (.getTime date) (.getTime (js-date)))
+      (> (.getTime date) (.getTime (now)))
       "Date cannot be in the future.")))
 
 (defn json-expenses [expenses]
@@ -459,9 +460,11 @@
   (doto (js-date date)
     (.setHours 0 0 0 0)))
 
-(defn js-date
-  ([] (js/Date.))
-  ([date] (js/Date. date)))
+(defn now []
+  (js/Date.))
+
+(defn js-date [date]
+  (js/Date. date))
 
 (defn find-first [pred coll]
   (first (filter pred coll)))
