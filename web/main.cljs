@@ -36,7 +36,7 @@
      :bubble nil}))
 
 (defn app []
-  [:div.container.mt-4
+  [:div.container
    [summary-card]
    [expense-list]
    [new-expense-button]
@@ -503,4 +503,4 @@
        coll))
 
 (swap! app-state assoc :expenses (load-expenses))
-(rdom/render [app] js/document.body)
+(rdom/render [app] (js/document.getElementById "app"))

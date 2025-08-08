@@ -18,10 +18,18 @@ mkdir -p ${WEB_BUILD_DIR}
 cd ${WEB_DIR}
 npm install
 
+# Get last commit date and short commit hash
+COMMIT_DATE=$(git log -1 --format=%cd --date=format:%Y-%m-%d)
+COMMIT_HASH=$(git rev-parse --short HEAD)
+VERSION="${COMMIT_DATE}-${COMMIT_HASH}"
+sed "s#%VERSION%#${VERSION}#g" index.html > \
+    ${WEB_BUILD_DIR}/index.html
+
 rm -rf ${WEB_BUILD_DIR}/dist
 mkdir -p ${WEB_BUILD_DIR}/dist
+
 cp \
-    index.html \
+    ${WEB_BUILD_DIR}/index.html \
     main.cljs \
     node_modules/bootstrap/dist/css/bootstrap.css \
     node_modules/react/umd/react.production.min.js \
