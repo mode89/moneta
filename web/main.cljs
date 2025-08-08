@@ -18,7 +18,6 @@
   parse-json-expenses
   load-expenses
   save-expenses
-  get-current-month
   format-currency
   format-date
   now
@@ -52,7 +51,8 @@
 (defn summary-card []
   [:div.card.mb-4
    [:div.card-body
-    [:h2.card-title (get-current-month)]
+    [:h2.card-title
+     (.toLocaleString (now) "default" #js{:month "long"})]
     [:p.card-text.fs-3
      {:on-click #(swap! app-state update :show-numbers? not)
       :style {:cursor "pointer"}}
@@ -452,9 +452,6 @@
 
 (defn format-currency [amount]
   (str "$" (.toFixed amount 2)))
-
-(defn get-current-month []
-  (.toLocaleString (js-date) "default" #js{:month "long" :year "numeric"}))
 
 (defn beginning-of-day [date]
   (doto (js-date date)
