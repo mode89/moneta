@@ -120,9 +120,8 @@
    {:style {:cursor "pointer" :user-select "none"}
     :on-click #(swap! app-state assoc :editing-expense (:id expense))}
    [:div
-    [:strong (:description expense)]
+    [:span (:description expense)]
     [:br]
-    [:small.text-muted (format-date (:date expense))]
     (when (seq (:categories expense))
       [:div.text-info.small
        (string/join ", " (sort (:categories expense)))])]
