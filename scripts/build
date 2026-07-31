@@ -30,15 +30,16 @@ mkdir -p ${WEB_BUILD_DIR}/dist
 
 cp \
     ${WEB_BUILD_DIR}/index.html \
-    main.cljs \
+    main.js \
     node_modules/bootstrap/dist/css/bootstrap.css \
-    node_modules/react/umd/react.production.min.js \
-    node_modules/react-dom/umd/react-dom.production.min.js \
-    node_modules/scittle/dist/scittle.js \
-    node_modules/scittle/dist/scittle.reagent.js \
     ${MDI_DIR}/file_download.svg \
     ${MDI_DIR}/file_upload.svg \
     ${WEB_BUILD_DIR}/dist
+
+cp node_modules/solid-js/dist/solid.js ${WEB_BUILD_DIR}/dist/solid.js
+cp node_modules/solid-js/web/dist/web.js ${WEB_BUILD_DIR}/dist/solid-web.js
+cp node_modules/solid-js/store/dist/store.js ${WEB_BUILD_DIR}/dist/solid-store.js
+cp node_modules/solid-js/html/dist/html.js ${WEB_BUILD_DIR}/dist/solid-html.js
 
 echo
 echo "====================== Building Android app ========================"

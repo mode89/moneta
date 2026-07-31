@@ -42,11 +42,17 @@
       }
     </style>
 
-    <script src="react.production.min.js" crossorigin></script>
-    <script src="react-dom.production.min.js" crossorigin></script>
-    <script src="scittle.js" type="application/javascript"></script>
-    <script src="scittle.reagent.js" type="application/javascript"></script>
-    <script src="main.cljs" type="application/x-scittle"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "solid-js": "./solid.js",
+          "solid-js/web": "./solid-web.js",
+          "solid-js/store": "./solid-store.js",
+          "solid-js/html": "./solid-html.js"
+        }
+      }
+    </script>
+    <script src="main.js" type="module"></script>
   </head>
   <body>
     <div class="version">Version: %VERSION%</div>
