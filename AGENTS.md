@@ -29,7 +29,9 @@ nix-shell --run "scripts/build"
 * `scripts/install` installs the debug APK via `adb install -r`.
 * `scripts/emulator` creates the `moneta` AVD if missing and starts it.
 
-There is no test suite and no linter configured. Verify changes by loading the app (browser via `scripts/serve`, or emulator) and exercising the affected flow.
+* `scripts/test` runs the unit tests in `web/test/` with Node's built-in runner, under two timezones. No linter is configured.
+
+The tests cover the domain layer of `main.js` (validation, form conversion, stored JSON, store actions, import) but not the Solid components, so also verify UI changes by loading the app (browser via `scripts/serve`, or emulator) and exercising the affected flow.
 
 Also, if you need to control browser, you can use `playwright-cli`:
 

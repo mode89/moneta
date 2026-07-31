@@ -3,13 +3,13 @@ import { createStore } from "solid-js/store";
 import { render } from "solid-js/web";
 import html from "solid-js/html";
 
-const [expenses, setExpenses] = createStore([]);
+export const [expenses, setExpenses] = createStore([]);
 const [addingExpense, setAddingExpense] = createSignal(false);
 const [editingExpenseId, setEditingExpenseId] = createSignal(null);
 const [showNumbers, setShowNumbers] = createSignal(false);
-const [bubble, setBubble] = createSignal(null);
+export const [bubble, setBubble] = createSignal(null);
 
-function main() {
+export function main() {
   setExpenses(loadExpenses());
   render(App, document.getElementById("app"));
 }
@@ -266,7 +266,7 @@ function ExpenseModal(props) {
                   type="date"
                   value=${() => formatDate(form.date)}
                   onInput=${(event) =>
-                    setForm("date", new Date(event.target.value))}
+                    setForm("date", parseIsoDate(event.target.value))}
                 />
               </div>
               <div class="mb-3">
@@ -337,7 +337,7 @@ function editExpenseActions(id) {
   };
 }
 
-function addExpense(form) {
+export function addExpense(form) {
   setExpenses((expenses) => [
     ...expenses,
     { id: now().getTime(), ...expenseFromForm(form) },
@@ -345,7 +345,7 @@ function addExpense(form) {
   saveExpenses();
 }
 
-function updateExpense(id, form) {
+export function updateExpense(id, form) {
   setExpenses((expenses) =>
     expenses.map((expense) =>
       expense.id === id ? { id, ...expenseFromForm(form) } : expense,
@@ -354,13 +354,13 @@ function updateExpense(id, form) {
   saveExpenses();
 }
 
-function deleteExpense(id) {
+export function deleteExpense(id) {
   setExpenses((expenses) => expenses.filter((expense) => expense.id !== id));
   saveExpenses();
 }
 
 // Returns an error message for an invalid form, or null.
-function validateExpense(form) {
+export function validateExpense(form) {
   const amount = parseFloat(form.amount);
   const date = beginningOfDay(form.date);
   if (isNaN(amount) || amount <= 0) return "Invalid amount.";
@@ -370,11 +370,11 @@ function validateExpense(form) {
   return null;
 }
 
-function blankExpenseForm() {
+export function blankExpenseForm() {
   return { amount: "", description: "", date: now(), categories: "" };
 }
 
-function expenseForm(expense) {
+export function expenseForm(expense) {
   return {
     amount: String(expense.amount),
     description: expense.description,
@@ -383,7 +383,7 @@ function expenseForm(expense) {
   };
 }
 
-function expenseFromForm(form) {
+export function expenseFromForm(form) {
   return {
     amount: parseFloat(form.amount),
     description: form.description.trim(),
@@ -429,7 +429,7 @@ function importExpenses() {
   input.click();
 }
 
-function importExpensesFrom(content) {
+export function importExpensesFrom(content) {
   try {
     const imported = parseExpenses(content);
     const errors = imported.map(importedExpenseError).filter((e) => e !== null);
@@ -446,35 +446,39 @@ function importExpensesFrom(content) {
 }
 
 // Returns an error message for an invalid imported expense, or null.
-function importedExpenseError(expense) {
+export function importedExpenseError(expense) {
   if (expense.id == null) return "Missing ID.";
   if (isNaN(expense.amount) || expense.amount <= 0) return "Invalid amount.";
   if (!expense.description || expense.description.trim() === "")
     return "Empty description.";
+  if (isNaN(expense.date.getTime())) return "Invalid date.";
   if (expense.date.getTime() > now().getTime())
     return "Date cannot be in the future.";
   return null;
 }
 
-function loadExpenses() {
+export function loadExpenses() {
   const stored = localStorage.getItem("expenses");
   return stored ? parseExpenses(stored) : [];
 }
 
-function saveExpenses() {
+let bubbleTimer = null;
+
+export function saveExpenses() {
   localStorage.setItem("expenses", serializeExpenses(expenses));
   setBubble("Saved");
-  setTimeout(() => setBubble(null), 3000);
+  clearTimeout(bubbleTimer);
+  bubbleTimer = setTimeout(() => setBubble(null), 3000);
 }
 
-function parseExpenses(json) {
+export function parseExpenses(json) {
   return JSON.parse(json).map((expense) => ({
     ...expense,
-    date: new Date(expense.date),
+    date: parseIsoDate(expense.date),
   }));
 }
 
-function serializeExpenses(expenses) {
+export function serializeExpenses(expenses) {
   const stored = expenses.map((expense) => ({
     ...expense,
     date: formatDate(expense.date),
@@ -482,7 +486,7 @@ function serializeExpenses(expenses) {
   return JSON.stringify(stored, null, 2);
 }
 
-function findExpense(id) {
+export function findExpense(id) {
   return expenses.find((expense) => expense.id === id);
 }
 
@@ -490,7 +494,7 @@ function toggleNumbers() {
   setShowNumbers((shown) => !shown);
 }
 
-function parseCategories(input) {
+export function parseCategories(input) {
   return input
     .trim()
     .split(/\s+/)
@@ -499,18 +503,25 @@ function parseCategories(input) {
     .sort();
 }
 
-function formatDate(date) {
+// Built from local parts, since `new Date("YYYY-MM-DD")` reads the text as UTC
+// midnight and would shift the day west of the meridian.
+export function parseIsoDate(text) {
+  const [year, month, day] = String(text).split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+export function formatDate(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return year + "-" + month + "-" + day;
 }
 
-function formatCurrency(amount) {
+export function formatCurrency(amount) {
   return "$" + amount.toFixed(2);
 }
 
-function beginningOfDay(date) {
+export function beginningOfDay(date) {
   const day = new Date(date);
   day.setHours(0, 0, 0, 0);
   return day;
@@ -519,5 +530,3 @@ function beginningOfDay(date) {
 function now() {
   return new Date();
 }
-
-main();

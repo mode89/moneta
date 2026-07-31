@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -e
+
+SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+cd "${SCRIPT_DIR}/../web"
+
+# Run everything twice, once east of UTC and once west, so that date handling
+# which only breaks on one side of the meridian cannot pass unnoticed. Both
+# timezones always run, so one failure still reports the other's results.
+status=0
+for tz in Asia/Kolkata America/New_York; do
+  echo "===================== TZ=${tz} ====================="
+  # A directory argument is read as a module path; only a glob selects the files.
+  TZ="${tz}" node --test "test/*.test.js" || status=$?
+done
+exit ${status}

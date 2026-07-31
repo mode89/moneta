@@ -1,6 +1,7 @@
 {
   "name": "moneta",
   "version": "1.0.0",
+  "type": "module",
   "dependencies": {
     "@material-design-icons/svg": "^0.14.15",
     "@playwright/cli": "^0.1.17",
