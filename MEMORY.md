@@ -3,7 +3,7 @@ _Reference context — observed facts and standing conventions for this project,
 ## Architecture
 
 - The stored JSON shape (`id`, `amount`, `description`, `date` as `YYYY-MM-DD`, `categories`) is a compatibility boundary: it is what sits in users' `localStorage` on device and what export/import files carry. Changing it strands existing installs.
-- An expense's `id` is its creation time in milliseconds (`now().getTime()`), and same-day list ordering sorts on it. Nothing in the stored format marks it as a timestamp.
+- Categories are kept sorted at every entry point: `parseCategories` sorts typed input and `parseExpenses` sorts what it reads. Views therefore join them without sorting, and importing rewrites a file's category order.
 
 ## Conventions
 
@@ -27,6 +27,9 @@ _Reference context — observed facts and standing conventions for this project,
 - The two byte-identical new/edit modal components were collapsed into one `ExpenseModal`. Why: ~80 duplicated lines with only the title, the Delete button, and the save action differing.
 - Three defects were fixed during the port rather than carried over: dead `validate-expense`, an import amount check whose `isNaN` parenthesisation meant it never ran, and a blank categories input producing `[""]` instead of `[]`.
 - Unit tests run in Node against functions exported from `main.js`, with no jsdom and no test framework (July 2026). Why: all four Solid entry points import headless, so the domain layer needs only stubbed `localStorage` and `alert`.
+- The modal and the import path share one `expenseError` check (July 2026), and the form's wording won: a blank imported description now reports "Description cannot be empty." rather than "Empty description."
+- An expense with no `categories` field loads as one with none (July 2026). Why: both the pre-refactor code and the first sorting version blanked the app at startup on such data, so tolerating it is a deliberate improvement.
+- Day headings call `formatDay`, a one-line delegate to `toIsoDate`, rather than `toIsoDate` itself. Why: the heading is free to stop looking like a stored date without touching the storage format.
 
 ## Open Questions
 

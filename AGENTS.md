@@ -47,9 +47,10 @@ npx playwright-cli --help # for usage
 
 * There is no bundler and no compile step. The browser loads `main.js` as an ES module and resolves `solid-js`, `solid-js/web`, `solid-js/store` and `solid-js/html` through the import map in `index.html`; `scripts/build` copies those four files out of `node_modules` under the matching names. Mistakes surface as runtime errors in the console.
 * Markup uses Solid's `html` tagged template (no JSX, since JSX would need a compile step).
-* State is module level: a `createStore` array of expenses plus `createSignal` flags `addingExpense`, `editingExpenseId`, `showNumbers`, `bubble`.
-* Top-down ordering: `main` and `App` first, then components, then actions, then persistence, then small utilities (`formatDate`, `formatCurrency`, `beginningOfDay`, `now`, ...). Function declarations hoist, so no forward declarations are needed.
-* Dates are `Date` objects in state and ISO `YYYY-MM-DD` strings in JSON. Conversion happens in `parseExpenses` / `serializeExpenses`.
+* State is module level: a `createStore` array of expenses plus `createSignal`s `editedExpense` (an id, `NEW_EXPENSE`, or `null` — the one signal behind both dialogs), `showNumbers`, `saveNotice`.
+* Top-down ordering: `main` and `App` first, then components, then actions, then persistence, then small utilities (`toIsoDate`, `formatCurrency`, `beginningOfDay`, `now`, ...). Function declarations hoist, so no forward declarations are needed.
+* Dates are `Date` objects in state, ISO `YYYY-MM-DD` strings in JSON and in the modal's form. `parseIsoDate` / `toIsoDate` convert; `parseIsoDate` builds from local parts because `new Date("YYYY-MM-DD")` reads the text as UTC.
+* A form holds what the user typed (all strings); `expenseFromForm` is the only place it becomes an expense, and `expenseError` validates the expense — the same check the import path runs.
 * Every mutation that should persist calls `saveExpenses`, which also triggers the "Saved" bubble.
 
 ### Two traps in `solid-js/html`

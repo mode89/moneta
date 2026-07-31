@@ -4,10 +4,13 @@ import { render } from "solid-js/web";
 import html from "solid-js/html";
 
 export const [expenses, setExpenses] = createStore([]);
-const [addingExpense, setAddingExpense] = createSignal(false);
-const [editingExpenseId, setEditingExpenseId] = createSignal(null);
+const [editedExpense, setEditedExpense] = createSignal(null);
 const [showNumbers, setShowNumbers] = createSignal(false);
-export const [bubble, setBubble] = createSignal(null);
+export const [saveNotice, setSaveNotice] = createSignal(null);
+
+// `editedExpense` is the id of the expense being edited, NEW_EXPENSE while one
+// is being added, or null when no dialog is open.
+const NEW_EXPENSE = "new";
 
 export function main() {
   setExpenses(loadExpenses());
@@ -20,28 +23,27 @@ function App() {
       <${SummaryCard} />
       <${ExpenseList} />
       <${NewExpenseButton} />
-      ${() =>
-        addingExpense() &&
-        html`<${ExpenseModal}
-          title="New Expense"
-          initial=${blankExpenseForm()}
-          actions=${newExpenseActions}
-        />`}
       ${() => {
-        const id = editingExpenseId();
-        return (
-          id !== null &&
-          html`<${ExpenseModal}
-            title="Edit Expense"
-            initial=${untrack(() => expenseForm(findExpense(id)))}
-            actions=${editExpenseActions(id)}
-          />`
-        );
+        const edited = editedExpense();
+        if (edited === null) return null;
+        if (edited === NEW_EXPENSE)
+          return html`<${ExpenseModal}
+            title="New Expense"
+            submitLabel="Save"
+            initial=${blankExpenseForm()}
+            actions=${newExpenseActions()}
+          />`;
+        return html`<${ExpenseModal}
+          title="Edit Expense"
+          submitLabel="Update"
+          initial=${untrack(() => formFromExpense(findExpense(edited)))}
+          actions=${editExpenseActions(edited)}
+        />`;
       }}
       ${() =>
-        bubble() &&
+        saveNotice() &&
         html`<div class="bubble alert alert-success show" role="alert">
-          ${bubble()}
+          ${saveNotice()}
         </div>`}
     </div>`;
 }
@@ -50,11 +52,7 @@ function SummaryCard() {
   const monthlyTotal = createMemo(() => {
     const today = now();
     return expenses
-      .filter(
-        (expense) =>
-          expense.date.getFullYear() === today.getFullYear() &&
-          expense.date.getMonth() === today.getMonth(),
-      )
+      .filter((expense) => isSameMonth(expense.date, today))
       .reduce((total, expense) => total + expense.amount, 0);
   });
   return html`
@@ -70,7 +68,7 @@ function SummaryCard() {
         >
           <span>Total Spent:</span>
           <span style=${{ color: "#dc3545" }}>
-            <${Amount} text=${() => formatCurrency(monthlyTotal())} />
+            <${Amount} value=${() => monthlyTotal()} />
           </span>
         </p>
       </div>
@@ -82,7 +80,9 @@ function ExpenseList() {
     const byDay = new Map();
     for (const expense of expenses) {
       const day = beginningOfDay(expense.date).getTime();
-      byDay.set(day, [...(byDay.get(day) || []), expense]);
+      const group = byDay.get(day) ?? [];
+      group.push(expense);
+      byDay.set(day, group);
     }
     return [...byDay.entries()]
       .sort(([a], [b]) => b - a)
@@ -136,7 +136,7 @@ function DailyExpenseList(props) {
   const total = createMemo(() =>
     props.day.expenses.reduce((total, expense) => total + expense.amount, 0),
   );
-  const sorted = createMemo(() =>
+  const newestFirst = createMemo(() =>
     [...props.day.expenses].sort((a, b) => b.id - a.id),
   );
   return html`
@@ -148,11 +148,11 @@ function DailyExpenseList(props) {
             style=${{ cursor: "pointer" }}
             onClick=${toggleNumbers}
           >
-            <span>${() => formatDate(props.day.date)}</span>
-            <span><${Amount} text=${() => formatCurrency(total())} /></span>
+            <span>${() => formatDay(props.day.date)}</span>
+            <span><${Amount} value=${() => total()} /></span>
           </strong>
         </li>
-        <${For} each=${sorted}>
+        <${For} each=${newestFirst}>
           ${(expense) => html`<${ExpenseItem} expense=${expense} />`}
         <//>
       </ul>
@@ -168,7 +168,7 @@ function ExpenseItem(props) {
     <li
       class="list-group-item d-flex justify-content-between align-items-center"
       style=${{ cursor: "pointer", "user-select": "none" }}
-      onClick=${() => setEditingExpenseId(props.expense.id)}
+      onClick=${() => setEditedExpense(props.expense.id)}
     >
       <div>
         <span>${() => props.expense.description}</span>
@@ -176,11 +176,11 @@ function ExpenseItem(props) {
         ${() =>
           props.expense.categories.length > 0 &&
           html`<div class="text-info small">
-            ${[...props.expense.categories].sort().join(", ")}
+            ${[...props.expense.categories].join(", ")}
           </div>`}
       </div>
       <span class="text-danger" onClick=${revealAmount}>
-        <${Amount} text=${() => "-" + formatCurrency(props.expense.amount)} />
+        <${Amount} value=${() => -props.expense.amount} />
       </span>
     </li>`;
 }
@@ -190,16 +190,16 @@ function NewExpenseButton() {
     <button
       class="btn btn-primary btn-lg rounded-circle fixed-bottom-right"
       style=${{ "z-index": 1000 }}
-      onClick=${() => setAddingExpense(true)}
+      onClick=${() => setEditedExpense(NEW_EXPENSE)}
     >
       +
     </button>`;
 }
 
-// Amount text, blurred until the user reveals numbers.
+// A money amount, blurred until the user reveals numbers.
 function Amount(props) {
   return html`<span class=${() => (showNumbers() ? "" : "blur-text")}>
-    ${() => props.text}
+    ${() => formatCurrency(props.value)}
   </span>`;
 }
 
@@ -208,12 +208,13 @@ function ExpenseModal(props) {
   const [form, setForm] = createStore(props.initial);
   const field = (key) => (event) => setForm(key, event.target.value);
   const submit = () => {
-    const error = validateExpense(form);
+    const expense = expenseFromForm(form);
+    const error = expenseError(expense);
     if (error) {
       alert(error);
       return;
     }
-    props.actions.save(form);
+    props.actions.save(expense);
   };
   return html`
     <div
@@ -264,9 +265,8 @@ function ExpenseModal(props) {
                   class="form-control"
                   id="expense-date"
                   type="date"
-                  value=${() => formatDate(form.date)}
-                  onInput=${(event) =>
-                    setForm("date", parseIsoDate(event.target.value))}
+                  value=${() => form.date}
+                  onInput=${field("date")}
                 />
               </div>
               <div class="mb-3">
@@ -302,7 +302,7 @@ function ExpenseModal(props) {
               Cancel
             </button>
             <button type="button" class="btn btn-primary" onClick=${submit}>
-              ${() => (props.actions.remove ? "Update" : "Save")}
+              ${() => props.submitLabel}
             </button>
           </div>
         </div>
@@ -310,46 +310,44 @@ function ExpenseModal(props) {
     </div>`;
 }
 
-const newExpenseActions = {
-  save(form) {
-    addExpense(form);
-    setAddingExpense(false);
-  },
-  close() {
-    setAddingExpense(false);
-  },
-};
+function newExpenseActions() {
+  return {
+    save(expense) {
+      addExpense(expense);
+      closeModal();
+    },
+    close: closeModal,
+  };
+}
 
 function editExpenseActions(id) {
   return {
-    save(form) {
-      updateExpense(id, form);
-      setEditingExpenseId(null);
+    save(expense) {
+      updateExpense(id, expense);
+      closeModal();
     },
     remove() {
       if (!confirm("Are you sure?")) return;
       deleteExpense(id);
-      setEditingExpenseId(null);
+      closeModal();
     },
-    close() {
-      setEditingExpenseId(null);
-    },
+    close: closeModal,
   };
 }
 
-export function addExpense(form) {
-  setExpenses((expenses) => [
-    ...expenses,
-    { id: now().getTime(), ...expenseFromForm(form) },
-  ]);
+function closeModal() {
+  setEditedExpense(null);
+}
+
+// Ids are creation timestamps; DailyExpenseList orders a day's expenses by them.
+export function addExpense(expense) {
+  setExpenses((expenses) => [...expenses, { id: now().getTime(), ...expense }]);
   saveExpenses();
 }
 
-export function updateExpense(id, form) {
+export function updateExpense(id, expense) {
   setExpenses((expenses) =>
-    expenses.map((expense) =>
-      expense.id === id ? { id, ...expenseFromForm(form) } : expense,
-    ),
+    expenses.map((each) => (each.id === id ? { id, ...expense } : each)),
   );
   saveExpenses();
 }
@@ -359,26 +357,28 @@ export function deleteExpense(id) {
   saveExpenses();
 }
 
-// Returns an error message for an invalid form, or null.
-export function validateExpense(form) {
-  const amount = parseFloat(form.amount);
-  const date = beginningOfDay(form.date);
-  if (isNaN(amount) || amount <= 0) return "Invalid amount.";
-  if (form.description.trim() === "") return "Description cannot be empty.";
-  if (isNaN(date.getTime())) return "Invalid date.";
-  if (date.getTime() > now().getTime()) return "Date cannot be in the future.";
+// Returns an error message for an invalid expense, or null.
+export function expenseError(expense) {
+  if (isNaN(expense.amount) || expense.amount <= 0) return "Invalid amount.";
+  if (!expense.description || expense.description.trim() === "")
+    return "Description cannot be empty.";
+  if (isNaN(expense.date.getTime())) return "Invalid date.";
+  if (beginningOfDay(expense.date).getTime() > now().getTime())
+    return "Date cannot be in the future.";
   return null;
 }
 
+// A form holds what the user typed; expenseFromForm is the only place it
+// becomes an expense.
 export function blankExpenseForm() {
-  return { amount: "", description: "", date: now(), categories: "" };
+  return { amount: "", description: "", date: toIsoDate(now()), categories: "" };
 }
 
-export function expenseForm(expense) {
+export function formFromExpense(expense) {
   return {
     amount: String(expense.amount),
     description: expense.description,
-    date: expense.date,
+    date: toIsoDate(expense.date),
     categories: [...expense.categories].join(" "),
   };
 }
@@ -387,14 +387,14 @@ export function expenseFromForm(form) {
   return {
     amount: parseFloat(form.amount),
     description: form.description.trim(),
-    date: new Date(form.date),
+    date: parseIsoDate(form.date),
     categories: parseCategories(form.categories),
   };
 }
 
 function exportExpenses() {
   const json = serializeExpenses(expenses);
-  const filename = "moneta-" + formatDate(now()) + ".json";
+  const filename = "moneta-" + toIsoDate(now()) + ".json";
   if (window.Android) {
     Android.createFile(filename, json);
     return;
@@ -411,11 +411,9 @@ function exportExpenses() {
 
 function importExpenses() {
   if (window.Android) {
-    console.log("Importing expenses via Android.pickFile");
-    Android.pickFile(importExpensesFrom);
+    Android.pickFile(replaceExpensesFromJson);
     return;
   }
-  console.log("Importing expenses via file input (not Android)");
   const input = document.createElement("input");
   input.type = "file";
   input.accept = ".json";
@@ -423,15 +421,16 @@ function importExpenses() {
     const file = event.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (event) => importExpensesFrom(event.target.result);
+    reader.onload = (event) => replaceExpensesFromJson(event.target.result);
     reader.readAsText(file);
   };
   input.click();
 }
 
-export function importExpensesFrom(content) {
+// Importing discards the expenses already on the device.
+export function replaceExpensesFromJson(json) {
   try {
-    const imported = parseExpenses(content);
+    const imported = parseExpenses(json);
     const errors = imported.map(importedExpenseError).filter((e) => e !== null);
     if (errors.length > 0) {
       alert("File contains errors.");
@@ -448,13 +447,7 @@ export function importExpensesFrom(content) {
 // Returns an error message for an invalid imported expense, or null.
 export function importedExpenseError(expense) {
   if (expense.id == null) return "Missing ID.";
-  if (isNaN(expense.amount) || expense.amount <= 0) return "Invalid amount.";
-  if (!expense.description || expense.description.trim() === "")
-    return "Empty description.";
-  if (isNaN(expense.date.getTime())) return "Invalid date.";
-  if (expense.date.getTime() > now().getTime())
-    return "Date cannot be in the future.";
-  return null;
+  return expenseError(expense);
 }
 
 export function loadExpenses() {
@@ -462,26 +455,27 @@ export function loadExpenses() {
   return stored ? parseExpenses(stored) : [];
 }
 
-let bubbleTimer = null;
+let noticeTimer = null;
 
 export function saveExpenses() {
   localStorage.setItem("expenses", serializeExpenses(expenses));
-  setBubble("Saved");
-  clearTimeout(bubbleTimer);
-  bubbleTimer = setTimeout(() => setBubble(null), 3000);
+  setSaveNotice("Saved");
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => setSaveNotice(null), 3000);
 }
 
 export function parseExpenses(json) {
   return JSON.parse(json).map((expense) => ({
     ...expense,
     date: parseIsoDate(expense.date),
+    categories: [...(expense.categories ?? [])].sort(),
   }));
 }
 
 export function serializeExpenses(expenses) {
   const stored = expenses.map((expense) => ({
     ...expense,
-    date: formatDate(expense.date),
+    date: toIsoDate(expense.date),
   }));
   return JSON.stringify(stored, null, 2);
 }
@@ -510,15 +504,30 @@ export function parseIsoDate(text) {
   return new Date(year, month - 1, day);
 }
 
-export function formatDate(date) {
+// The stored and exported JSON carry this format; changing it strands the
+// expenses already on users' devices.
+export function toIsoDate(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return year + "-" + month + "-" + day;
 }
 
+// Day headings happen to read as ISO dates today; they are free to diverge.
+export function formatDay(date) {
+  return toIsoDate(date);
+}
+
 export function formatCurrency(amount) {
-  return "$" + amount.toFixed(2);
+  const sign = amount < 0 ? "-" : "";
+  return sign + "$" + Math.abs(amount).toFixed(2);
+}
+
+export function isSameMonth(date, other) {
+  return (
+    date.getFullYear() === other.getFullYear() &&
+    date.getMonth() === other.getMonth()
+  );
 }
 
 export function beginningOfDay(date) {

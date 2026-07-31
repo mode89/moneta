@@ -13,17 +13,18 @@ globalThis.alert = (message) => alerts.push(message);
 
 const {
   addExpense,
-  bubble,
   deleteExpense,
+  expenseFromForm,
   expenses,
   findExpense,
-  formatDate,
-  importExpensesFrom,
   loadExpenses,
   parseExpenses,
+  replaceExpensesFromJson,
   saveExpenses,
+  saveNotice,
   serializeExpenses,
   setExpenses,
+  toIsoDate,
   updateExpense,
 } = await import("../main.js");
 
@@ -33,13 +34,16 @@ const seed = (...stored) => setExpenses(parseExpenses(JSON.stringify(stored)));
 
 const storedExpenses = () => storage.get("expenses");
 
-const form = (overrides = {}) => ({
-  amount: "12.50",
-  description: "Groceries",
-  date: new Date(2026, 1, 12),
-  categories: "food",
-  ...overrides,
-});
+// The dialog converts the form before saving, so the store's own functions
+// take expenses.
+const filledIn = (overrides = {}) =>
+  expenseFromForm({
+    amount: "12.50",
+    description: "Groceries",
+    date: "2026-02-12",
+    categories: "food",
+    ...overrides,
+  });
 
 const expense = (overrides = {}) => ({
   id: 1,
@@ -57,23 +61,23 @@ beforeEach(() => {
 });
 
 describe("addExpense", () => {
-  test("appends the expense described by the form", () => {
-    addExpense(form());
+  test("appends the expense", () => {
+    addExpense(filledIn());
     assert.equal(expenses.length, 1);
     assert.equal(expenses[0].amount, 12.5);
     assert.equal(expenses[0].description, "Groceries");
     assert.deepEqual(expenses[0].categories, ["food"]);
-    assert.equal(formatDate(expenses[0].date), "2026-02-12");
+    assert.equal(toIsoDate(expenses[0].date), "2026-02-12");
   });
 
   test("assigns an id", () => {
-    addExpense(form());
+    addExpense(filledIn());
     assert.equal(typeof expenses[0].id, "number");
   });
 
   test("keeps earlier expenses", () => {
-    addExpense(form({ description: "First" }));
-    addExpense(form({ description: "Second" }));
+    addExpense(filledIn({ description: "First" }));
+    addExpense(filledIn({ description: "Second" }));
     assert.deepEqual(
       expenses.map((each) => each.description),
       ["First", "Second"],
@@ -81,7 +85,7 @@ describe("addExpense", () => {
   });
 
   test("persists the new list", () => {
-    addExpense(form());
+    addExpense(filledIn());
     assert.equal(storedExpenses(), serializeExpenses(expenses));
   });
 });
@@ -93,7 +97,7 @@ describe("updateExpense", () => {
 
   test("replaces the fields of the matching expense", () => {
     const id = expenses[0].id;
-    updateExpense(id, form({ amount: "99", description: "Rent", categories: "" }));
+    updateExpense(id, filledIn({ amount: "99", description: "Rent", categories: "" }));
     const updated = findExpense(id);
     assert.equal(updated.amount, 99);
     assert.equal(updated.description, "Rent");
@@ -102,23 +106,34 @@ describe("updateExpense", () => {
 
   test("keeps the id", () => {
     const id = expenses[0].id;
-    updateExpense(id, form({ description: "Rent" }));
+    updateExpense(id, filledIn({ description: "Rent" }));
     assert.equal(findExpense(id).description, "Rent");
   });
 
+  test("writes the id first, as addExpense does", () => {
+    updateExpense(expenses[0].id, filledIn({ description: "Rent" }));
+    assert.deepEqual(Object.keys(expenses[0]), [
+      "id",
+      "amount",
+      "description",
+      "date",
+      "categories",
+    ]);
+  });
+
   test("leaves other expenses alone", () => {
-    updateExpense(expenses[0].id, form({ description: "Rent" }));
+    updateExpense(expenses[0].id, filledIn({ description: "Rent" }));
     assert.equal(expenses[1].description, "Second");
   });
 
   test("changes nothing when no expense matches", () => {
     const before = serializeExpenses(expenses);
-    updateExpense(-1, form({ description: "Rent" }));
+    updateExpense(-1, filledIn({ description: "Rent" }));
     assert.equal(serializeExpenses(expenses), before);
   });
 
   test("persists the updated list", () => {
-    updateExpense(expenses[0].id, form({ description: "Rent" }));
+    updateExpense(expenses[0].id, filledIn({ description: "Rent" }));
     assert.equal(storedExpenses(), serializeExpenses(expenses));
   });
 });
@@ -135,7 +150,7 @@ describe("deleteExpense", () => {
   });
 
   test("changes nothing when no expense matches", () => {
-    addExpense(form());
+    addExpense(filledIn());
     deleteExpense(-1);
     assert.equal(expenses.length, 1);
   });
@@ -143,7 +158,7 @@ describe("deleteExpense", () => {
 
 describe("findExpense", () => {
   test("returns the expense with that id, or undefined", () => {
-    addExpense(form());
+    addExpense(filledIn());
     const id = expenses[0].id;
     assert.equal(findExpense(id).description, "Groceries");
     assert.equal(findExpense(-1), undefined);
@@ -156,22 +171,22 @@ describe("loadExpenses", () => {
   });
 
   test("restores what was saved, dates included", () => {
-    addExpense(form());
+    addExpense(filledIn());
     const loaded = loadExpenses();
     assert.equal(loaded.length, 1);
     assert.equal(loaded[0].amount, 12.5);
-    assert.equal(formatDate(loaded[0].date), "2026-02-12");
+    assert.equal(toIsoDate(loaded[0].date), "2026-02-12");
   });
 });
 
-describe("the Saved bubble", () => {
+describe("the Saved notice", () => {
   test("appears on save and disappears three seconds later", () => {
     mock.timers.enable({ apis: ["setTimeout"] });
     try {
       saveExpenses();
-      assert.equal(bubble(), "Saved");
+      assert.equal(saveNotice(), "Saved");
       mock.timers.tick(3000);
-      assert.equal(bubble(), null);
+      assert.equal(saveNotice(), null);
     } finally {
       mock.timers.reset();
     }
@@ -184,19 +199,19 @@ describe("the Saved bubble", () => {
       mock.timers.tick(2000);
       saveExpenses();
       mock.timers.tick(1500);
-      assert.equal(bubble(), "Saved");
+      assert.equal(saveNotice(), "Saved");
       mock.timers.tick(1500);
-      assert.equal(bubble(), null);
+      assert.equal(saveNotice(), null);
     } finally {
       mock.timers.reset();
     }
   });
 });
 
-describe("importExpensesFrom", () => {
+describe("replaceExpensesFromJson", () => {
   test("replaces the current expenses and persists them", () => {
-    addExpense(form({ description: "Existing" }));
-    importExpensesFrom(JSON.stringify([expense({ description: "Imported" })]));
+    addExpense(filledIn({ description: "Existing" }));
+    replaceExpensesFromJson(JSON.stringify([expense({ description: "Imported" })]));
     assert.deepEqual(
       expenses.map((each) => each.description),
       ["Imported"],
@@ -205,21 +220,21 @@ describe("importExpensesFrom", () => {
   });
 
   test("reads dates as the calendar day written in the file", () => {
-    importExpensesFrom(JSON.stringify([expense()]));
-    assert.equal(formatDate(expenses[0].date), "2026-02-12");
+    replaceExpensesFromJson(JSON.stringify([expense()]));
+    assert.equal(toIsoDate(expenses[0].date), "2026-02-12");
   });
 
   test("imports an empty file as an empty list", () => {
-    addExpense(form());
-    importExpensesFrom("[]");
+    addExpense(filledIn());
+    replaceExpensesFromJson("[]");
     assert.equal(expenses.length, 0);
   });
 
   test("rejects a file with an invalid expense, keeping the current ones", () => {
     mock.method(console, "error", () => {});
-    addExpense(form({ description: "Existing" }));
+    addExpense(filledIn({ description: "Existing" }));
     const before = storedExpenses();
-    importExpensesFrom(JSON.stringify([expense(), expense({ id: 2, amount: -1 })]));
+    replaceExpensesFromJson(JSON.stringify([expense(), expense({ id: 2, amount: -1 })]));
     assert.deepEqual(alerts, ["File contains errors."]);
     assert.deepEqual(
       expenses.map((each) => each.description),
@@ -230,25 +245,25 @@ describe("importExpensesFrom", () => {
 
   test("reports every problem it found to the console", () => {
     const logged = mock.method(console, "error", () => {});
-    importExpensesFrom(
+    replaceExpensesFromJson(
       JSON.stringify([expense({ amount: -1 }), expense({ id: 2, description: "" })]),
     );
     assert.deepEqual(
       logged.mock.calls.map((call) => call.arguments[0]),
-      ["Invalid amount.", "Empty description."],
+      ["Invalid amount.", "Description cannot be empty."],
     );
   });
 
   test("rejects a malformed document", () => {
-    addExpense(form({ description: "Existing" }));
-    importExpensesFrom("not json");
+    addExpense(filledIn({ description: "Existing" }));
+    replaceExpensesFromJson("not json");
     assert.equal(alerts.length, 1);
     assert.match(alerts[0], /^Failed to import expenses: /);
     assert.equal(expenses.length, 1);
   });
 
   test("rejects a document that is not a list of expenses", () => {
-    importExpensesFrom(JSON.stringify({ expenses: [] }));
+    replaceExpensesFromJson(JSON.stringify({ expenses: [] }));
     assert.equal(alerts.length, 1);
     assert.match(alerts[0], /^Failed to import expenses: /);
   });
