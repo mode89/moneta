@@ -6,10 +6,12 @@ Moneta is an Android expense tracker. The entire user interface is a web app (pl
 
 * `web/main.js` — the whole app: state, UI components, persistence, import/export.
 * `web/index.html` — page shell, custom CSS, import map, module script tag. `%VERSION%` is substituted at build time.
-* `web/package.json` — npm deps used purely as a source of static assets (Bootstrap, Solid, Material icons).
+* `web/package.json` — npm deps used purely as a source of static assets (Bootstrap, Solid, Material icons), plus `@playwright/test` for the UI suite.
+* `web/test/` — Node unit tests over the domain layer of `main.js`.
+* `web/e2e/` — Playwright UI suite: `fixtures.js` (page object, dialog recorder, seeding), `server.js` (serves the app for the tests), and the specs. `web/playwright.config.js` configures it.
 * `android/src/main/java/net/akrain/moneta/MainActivity.java` — WebView host plus the `Android` JavaScript bridge (file save/pick).
 * `android/src/main/assets/web/` — generated; build output copied here, not in git.
-* `scripts/` — `build`, `install`, `serve`, `emulator`.
+* `scripts/` — `build`, `install`, `serve`, `emulator`, `test`, `e2e`.
 * `shell.nix` — Android SDK, Gradle (JDK 17), Node.js.
 
 ## Working in the Nix shell
@@ -30,8 +32,11 @@ nix-shell --run "scripts/build"
 * `scripts/emulator` creates the `moneta` AVD if missing and starts it.
 
 * `scripts/test` runs the unit tests in `web/test/` with Node's built-in runner, under two timezones. No linter is configured.
+* `scripts/e2e` runs the Playwright UI suite in `web/e2e/`, also under two timezones (one Chromium project each for Asia/Kolkata and America/New_York). It takes Playwright's own arguments, so `scripts/e2e --project=east-of-utc add-expense --headed` works. It starts its own server on port 8099 from `web/e2e/server.js`, which serves `web/index.html`, `web/main.js` and the four Solid modules under the same names `scripts/build` gives them — so no build is needed, and the import map resolves exactly as it does on the device.
 
-The tests cover the domain layer of `main.js` (validation, form conversion, stored JSON, store actions, import) but not the Solid components, so also verify UI changes by loading the app (browser via `scripts/serve`, or emulator) and exercising the affected flow.
+The unit tests cover the domain layer of `main.js` (validation, form conversion, stored JSON, store actions, import); the Playwright suite covers the Solid components and the flows through them (adding, editing, deleting, grouping and totals, blurred amounts, persistence and reload, import/export in both the browser and the Android branch). Between them a UI change should be provable without a device, but a change to the bridge itself still needs an emulator run.
+
+Writing UI tests: `web/e2e/fixtures.js` holds a `MonetaApp` page object with the locators, `app.open({ expenses, now, android })` for seeding `localStorage`, fixing the clock and installing a stand-in bridge before the page loads, and a `dialogs` fixture — the app talks to the user through `alert` and `confirm`, which Playwright dismisses unless a test says `dialogs.acceptAll()`.
 
 Also, if you need to control browser, you can use `playwright-cli`:
 
