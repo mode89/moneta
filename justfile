@@ -70,6 +70,12 @@ build-web: deps
     cp web/node_modules/solid-js/web/dist/web.js build/web/dist/solid-web.js
     cp web/node_modules/solid-js/store/dist/store.js build/web/dist/solid-store.js
     cp web/node_modules/solid-js/html/dist/html.js build/web/dist/solid-html.js
+    cp web/node_modules/solid-transition-group/dist/index.js build/web/dist/solid-transition-group.js
+    cp web/node_modules/@solid-primitives/transition-group/dist/index.js build/web/dist/sp-transition-group.js
+    cp web/node_modules/@solid-primitives/refs/dist/index.js build/web/dist/sp-refs.js
+    cp web/node_modules/@solid-primitives/utils/dist/index.js build/web/dist/sp-utils.js
+    # sp-utils.js re-exports ./types.js, a relative import no import map covers.
+    cp web/node_modules/@solid-primitives/utils/dist/types.js build/web/dist/types.js
     rm -rf android/src/main/assets/web
     cp -r build/web/dist android/src/main/assets/web
 

@@ -12,7 +12,8 @@ _Reference context — observed facts and standing conventions for this project,
 - UI changes are verified in a real browser via `just test-browser`, the Playwright suite in `web/e2e/`; the Node unit tests cover only the domain layer. Why: nothing else catches wiring errors with no compile step.
 - Exploratory poking at the UI goes through `just serve` plus `playwright-cli`, outside the Playwright suite.
 - A claim about an animation is settled by sampling `getComputedStyle` at fixed delays through a press, not by eye or screenshot. Why: mid-transition values pinpointed two press-state stutters that screenshots could not show.
-- A view with no suite coverage yet is checked by a throwaway Node script that imports `chromium` from `web/node_modules`, seeds `localStorage`, fixes the clock and screenshots each state. Why: it sees what a locator assertion cannot.
+- A view with no suite coverage yet is checked by a throwaway Node script that seeds `localStorage`, fixes the clock and screenshots each state. Why: it sees what a locator assertion cannot.
+- A runtime npm dependency reaches the browser through three lists kept in step: the `cp` block in `build-web`, `FILES` in `web/e2e/server.js`, and the import map in `web/index.html`. Why: no bundler, so a missing entry is a blank page.
 - Playwright runs need no confirmation from the user: they start a local server, drive a headless browser and write files under `/tmp`.
 - The UI suite reaches the app through `web/e2e/fixtures.js`, where locators live on the `MonetaApp` page object. Why: the app has no test hooks, so its markup is described in one place. How to apply: add locators there, not in a spec.
 - `MonetaApp` helpers that describe rendered content expose a locator, not an awaited snapshot. Why: `expect(await …).toEqual(…)` compares plain values and never retries, so it reads the DOM mid-render.
@@ -53,6 +54,7 @@ _Reference context — observed facts and standing conventions for this project,
 - Playwright's browsers come from Nix: `shell.nix` exports `PLAYWRIGHT_BROWSERS_PATH` to `pkgs.playwright.browsers`, and `just test-browser` downloads nothing.
 - `shell.nix` exports `FONTCONFIG_FILE` via `pkgs.makeFontsConf`. Why: with no fontconfig config Chromium aborts in Skia ("SkFontMgr_FontConfigInterface.cpp: Not implemented") on the first text it shapes.
 - A Chromium that dies mid-test reports as "Target page, context or browser has been closed" on whatever locator call was in flight; the real cause is the last `[pid=...][err]` line in the browser log.
+- `web/node_modules/playwright` is a 1.62 alpha pulled in by `@playwright/cli`, and its Chromium build is absent from the Nix browser set. A script outside the suite imports `chromium` from `web/node_modules/@playwright/test/node_modules/playwright`.
 - `@playwright/test` in `web/package.json` is pinned exact to the nixpkgs `playwright-driver` version, 1.59.1 as of July 2026.
 - A Playwright release and a Chromium build number are a matched pair; when the npm version and the Nix browser set disagree, every test fails at launch with "Executable doesn't exist" naming a build absent from the store path.
 - A nixpkgs bump that moves `playwright-driver` re-breaks the suite until `@playwright/test` is re-pinned to match; `nix-instantiate --eval -E 'with import <nixpkgs> {}; playwright-driver.version'` reads the version to pin to.
@@ -73,6 +75,9 @@ _Reference context — observed facts and standing conventions for this project,
 - The add/edit dialog is a full bottom sheet, and it closes by tapping the dimmed area outside it, discarding silently. Why: back-button dismissal does not exist in a plain browser, where this UI is developed and tested.
 - The header shows month, total, expense count and average per day, with no eyebrow label above the month. Why: a label restates the month line and only carries information while filtering.
 - Settings sits behind a gear top-right and closes with a ✕ in the same corner, holding only Export, Import and the version.
+- Sheet animation uses `solid-transition-group`'s `<Transition>`, not a hand-rolled `setTimeout` before unmount. Why: it is the package the Solid project publishes for this, and the duration then lives only in CSS.
+- `<Transition>` runs in `mode="outin"`, so a reopened sheet waits for the leaving one. Why: simultaneous mode put two `.sheet` elements in the page at once and broke every locator that assumes one.
+- Only the add/edit sheet animates; the confirmation cards and the settings screen still appear and vanish instantly.
 - Settings holds no list of categories. Why: it would duplicate the header chips and could report a duplicate-name problem without offering rename, merge or delete to fix it.
 - Delete and import are confirmed with wording that names what will be lost; the add/edit dialog is not.
 - Chrome's blue tap highlight is suppressed app-wide and replaced by `:active` rules that darken the pressed surface one step in the palette. Why: nothing else in the design acknowledges a press.
@@ -100,6 +105,7 @@ _Reference context — observed facts and standing conventions for this project,
 - ✗ Back-button dismissal for the dialog and settings was abandoned: it needs a Java `onBackPressed` bridge calling into the page, and still leaves plain-browser use with no way to close either.
 - ✗ Assigning each category a random colour from the least-used tones was abandoned: it guarantees distinct colours but requires storing the assignments, cleaning them up when a category disappears, and reassigning on import.
 - ✗ Visual directions explored and rejected for this app: greenbar ledger, thermal till roll, coin/ring, dark instrument gauge, and a neo-brutalist bar-chart list.
+- ✗ A `prefers-reduced-motion` rule setting `transition: none` on the sheet was rejected: `Transition` unmounts on `transitionend`, which never fires without a transition. Honouring it needs an `onExit(el, done)` hook.
 - ✗ A "Discard this expense?" confirmation on closing the add/edit dialog was designed and then dropped as noise for what is usually an empty form.
 - ✗ direnv with `scripts/` on `PATH` as the command front door was rejected: direnv is not used here, and `test` and `install` collide with a shell builtin and a coreutils binary.
 - ✗ A Makefile and a `./dev` dispatcher script were both rejected as the development front door: Make passes arguments only as `ARGS=`, and the dispatcher earned its keep only by hiding `nix-shell`, which is entered anyway.

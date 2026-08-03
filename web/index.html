@@ -257,6 +257,16 @@
       /* dialogs: a dim that closes them, and the sheet or card it carries */
       /* dialogs sit above the settings screen, which they can be opened from */
       .scrim { position: absolute; inset: 0; background: rgba(47, 42, 42, 0.42); z-index: 8; }
+      /* The sheet and its dim move together as one layer, which is also the
+         element `Transition` watches: the transition has to be on the layer
+         itself, since a child's `transitionend` carries the wrong target and
+         would leave the layer in the page for ever. */
+      .sheet-layer { position: absolute; inset: 0; z-index: 8; }
+      .sheet-enter-active, .sheet-exit-active { transition: opacity 170ms ease; }
+      .sheet-exit-active { pointer-events: none; }
+      .sheet-enter-active .sheet, .sheet-exit-active .sheet { transition: transform 170ms ease; }
+      .sheet-enter, .sheet-exit-to { opacity: 0; }
+      .sheet-enter .sheet, .sheet-exit-to .sheet { transform: translateY(100%); }
       .sheet {
         position: absolute;
         left: 0;
@@ -379,7 +389,11 @@
           "solid-js": "./solid.js",
           "solid-js/web": "./solid-web.js",
           "solid-js/store": "./solid-store.js",
-          "solid-js/html": "./solid-html.js"
+          "solid-js/html": "./solid-html.js",
+          "solid-transition-group": "./solid-transition-group.js",
+          "@solid-primitives/transition-group": "./sp-transition-group.js",
+          "@solid-primitives/refs": "./sp-refs.js",
+          "@solid-primitives/utils": "./sp-utils.js"
         }
       }
     </script>

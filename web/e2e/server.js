@@ -20,6 +20,11 @@ const FILES = {
   "/solid-web.js": join(MODULES, "solid-js/web/dist/web.js"),
   "/solid-store.js": join(MODULES, "solid-js/store/dist/store.js"),
   "/solid-html.js": join(MODULES, "solid-js/html/dist/html.js"),
+  "/solid-transition-group.js": join(MODULES, "solid-transition-group/dist/index.js"),
+  "/sp-transition-group.js": join(MODULES, "@solid-primitives/transition-group/dist/index.js"),
+  "/sp-refs.js": join(MODULES, "@solid-primitives/refs/dist/index.js"),
+  "/sp-utils.js": join(MODULES, "@solid-primitives/utils/dist/index.js"),
+  "/types.js": join(MODULES, "@solid-primitives/utils/dist/types.js"),
   "/file_download.svg": join(ICONS, "file_download.svg"),
   "/file_upload.svg": join(ICONS, "file_upload.svg"),
 };

@@ -2,6 +2,7 @@ import { createMemo, createSignal, untrack, For } from "solid-js";
 import { createStore } from "solid-js/store";
 import { render } from "solid-js/web";
 import html from "solid-js/html";
+import { Transition } from "solid-transition-group";
 
 export const [expenses, setExpenses] = createStore([]);
 const [editedExpense, setEditedExpense] = createSignal(null);
@@ -29,23 +30,25 @@ function App() {
       <${CategoryLegend} />
       <div class="scroll"><${ExpenseList} /></div>
       <${NewExpenseButton} />
-      ${() => {
-        const edited = editedExpense();
-        if (edited === null) return null;
-        if (edited === NEW_EXPENSE)
+      <${Transition} name="sheet" mode="outin">
+        ${() => {
+          const edited = editedExpense();
+          if (edited === null) return null;
+          if (edited === NEW_EXPENSE)
+            return html`<${ExpenseSheet}
+              title="Add an expense"
+              submitLabel="Save expense"
+              initial=${blankExpenseForm()}
+              actions=${newExpenseActions()}
+            />`;
           return html`<${ExpenseSheet}
-            title="Add an expense"
-            submitLabel="Save expense"
-            initial=${blankExpenseForm()}
-            actions=${newExpenseActions()}
+            title="Edit expense"
+            submitLabel="Save changes"
+            initial=${untrack(() => formFromExpense(findExpense(edited)))}
+            actions=${editExpenseActions(edited)}
           />`;
-        return html`<${ExpenseSheet}
-          title="Edit expense"
-          submitLabel="Save changes"
-          initial=${untrack(() => formFromExpense(findExpense(edited)))}
-          actions=${editExpenseActions(edited)}
-        />`;
-      }}
+        }}
+      <//>
       ${() => {
         const id = deletedExpense();
         if (id === null) return null;
@@ -309,73 +312,75 @@ function ExpenseSheet(props) {
     props.actions.save(expense);
   };
   return html`
-    <div class="scrim" onClick=${() => props.actions.close()}></div>
-    <div class="sheet" role="dialog">
-      <div class="grab"></div>
-      <h3>${() => props.title}</h3>
-      <label class="flabel" for="expense-amount">Amount</label>
-      <input
-        class="in big"
-        id="expense-amount"
-        type="number"
-        inputmode="decimal"
-        placeholder="0.00"
-        step="0.01"
-        value=${() => form.amount}
-        onInput=${field("amount")}
-      />
-      <label class="flabel" for="expense-description">Description</label>
-      <input
-        class="in"
-        id="expense-description"
-        type="text"
-        placeholder="e.g. Groceries"
-        value=${() => form.description}
-        onInput=${field("description")}
-      />
-      <label class="flabel" for="expense-date">Date</label>
-      <input
-        class="in"
-        id="expense-date"
-        type="date"
-        value=${() => form.date}
-        onInput=${field("date")}
-      />
-      <label class="flabel">Categories</label>
-      <div class="chiprow">
-        <${For} each=${offered}>
-          ${(name) => html`
-            <button
-              class=${() => "chip" + (chosen().includes(name) ? " on" : "")}
-              onClick=${() => toggleCategory(name)}
-            >
-              <i style=${{ background: categoryInk(name) }}></i>
-              ${name}${() => (chosen().includes(name) ? " ✕" : "")}
-            </button>`}
-        <//>
+    <div class="sheet-layer">
+      <div class="scrim" onClick=${() => props.actions.close()}></div>
+      <div class="sheet" role="dialog">
+        <div class="grab"></div>
+        <h3>${() => props.title}</h3>
+        <label class="flabel" for="expense-amount">Amount</label>
+        <input
+          class="in big"
+          id="expense-amount"
+          type="number"
+          inputmode="decimal"
+          placeholder="0.00"
+          step="0.01"
+          value=${() => form.amount}
+          onInput=${field("amount")}
+        />
+        <label class="flabel" for="expense-description">Description</label>
+        <input
+          class="in"
+          id="expense-description"
+          type="text"
+          placeholder="e.g. Groceries"
+          value=${() => form.description}
+          onInput=${field("description")}
+        />
+        <label class="flabel" for="expense-date">Date</label>
+        <input
+          class="in"
+          id="expense-date"
+          type="date"
+          value=${() => form.date}
+          onInput=${field("date")}
+        />
+        <label class="flabel">Categories</label>
+        <div class="chiprow">
+          <${For} each=${offered}>
+            ${(name) => html`
+              <button
+                class=${() => "chip" + (chosen().includes(name) ? " on" : "")}
+                onClick=${() => toggleCategory(name)}
+              >
+                <i style=${{ background: categoryInk(name) }}></i>
+                ${name}${() => (chosen().includes(name) ? " ✕" : "")}
+              </button>`}
+          <//>
+          ${() =>
+            namingCategory()
+              ? html`<input
+                  class="chip-field"
+                  autofocus
+                  ref=${(element) => setTimeout(() => element.focus())}
+                  onInput=${(event) => (draftCategory = event.target.value)}
+                  onKeyDown=${draftKey}
+                  onBlur=${commitDraft}
+                />`
+              : html`<button class="chip" onClick=${nameCategory}>+ new</button>`}
+        </div>
         ${() =>
-          namingCategory()
-            ? html`<input
-                class="chip-field"
-                autofocus
-                ref=${(element) => setTimeout(() => element.focus())}
-                onInput=${(event) => (draftCategory = event.target.value)}
-                onKeyDown=${draftKey}
-                onBlur=${commitDraft}
-              />`
-            : html`<button class="chip" onClick=${nameCategory}>+ new</button>`}
+          props.actions.remove
+            ? html`<div class="actions">
+                <button class="ghost" onClick=${() => props.actions.remove()}>
+                  Delete
+                </button>
+                <button class="save" onClick=${submit}>${props.submitLabel}</button>
+              </div>`
+            : html`<button class="save" onClick=${submit}>
+                ${props.submitLabel}
+              </button>`}
       </div>
-      ${() =>
-        props.actions.remove
-          ? html`<div class="actions">
-              <button class="ghost" onClick=${() => props.actions.remove()}>
-                Delete
-              </button>
-              <button class="save" onClick=${submit}>${props.submitLabel}</button>
-            </div>`
-          : html`<button class="save" onClick=${submit}>
-              ${props.submitLabel}
-            </button>`}
     </div>`;
 }
 

@@ -119,7 +119,9 @@ export class MonetaApp {
     this.newExpenseButton = page.getByLabel("Add an expense");
 
     // the add/edit sheet
-    this.scrim = page.locator(".scrim");
+    // The last dim on the page belongs to the dialog on top: while the sheet
+    // animates away its dim is still there, under the confirmation's.
+    this.scrim = page.locator(".scrim").last();
     this.sheet = page.locator(".sheet");
     this.sheetTitle = this.sheet.locator("h3");
     this.amountInput = page.locator("#expense-amount");
