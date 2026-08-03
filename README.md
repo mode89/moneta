@@ -28,7 +28,7 @@ $ just
 
 `just` on its own lists the recipes:
 
-* `just test` — unit tests, east and west of UTC.
+* `just test` — unit tests.
 * `just test-browser [args]` — Playwright UI suite; arguments go to Playwright.
 * `just serve` — serve the web app on port 8080.
 * `just emulator` — create the `moneta` AVD if missing and start it.

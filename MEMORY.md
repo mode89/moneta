@@ -5,6 +5,7 @@ _Reference context — observed facts and standing conventions for this project,
 - The stored JSON shape (`id`, `amount`, `description`, `date` as `YYYY-MM-DD`, `categories`) is a compatibility boundary: it is what sits in users' `localStorage` on device and what export/import files carry. Changing it strands existing installs.
 - Categories are kept sorted at every entry point: `parseCategories` sorts typed input and `parseExpenses` sorts what it reads. Views therefore join them without sorting, and importing rewrites a file's category order.
 - The Playwright suite in `web/e2e/` is the only written specification of the UI: its wording, grouping, totals, blur behaviour and dialog flows exist nowhere else in prose.
+- Every local-date read in `main.js` goes through the exported date helpers (`toIsoDate`, `parseIsoDate`, `formatDay`, `isSameMonth`, `beginningOfDay`, `groupByDay`); the component layer above them calls `new Date` only inside `now()`.
 
 ## Conventions
 
@@ -14,7 +15,7 @@ _Reference context — observed facts and standing conventions for this project,
 - A claim about an animation is settled by sampling `getComputedStyle` at fixed delays through a press, not by eye or screenshot. Why: mid-transition values pinpointed two press-state stutters that screenshots could not show.
 - A view with no suite coverage yet is checked by a throwaway Node script that seeds `localStorage`, fixes the clock and screenshots each state. Why: it sees what a locator assertion cannot.
 - A runtime npm dependency reaches the browser through three lists kept in step: the `cp` block in `build-web`, `FILES` in `web/e2e/server.js`, and the import map in `web/index.html`. Why: no bundler, so a missing entry is a blank page.
-- Playwright runs need no confirmation from the user: they start a local server, drive a headless browser and write files under `/tmp`.
+- `just` recipes are run without asking the user first, Playwright included: they build, test, serve or drive a headless browser, all locally. Why: the user gave this standing permission after a Playwright run was queued for confirmation.
 - The UI suite reaches the app through `web/e2e/fixtures.js`, where locators live on the `MonetaApp` page object. Why: the app has no test hooks, so its markup is described in one place. How to apply: add locators there, not in a spec.
 - `MonetaApp` helpers that describe rendered content expose a locator, not an awaited snapshot. Why: `expect(await …).toEqual(…)` compares plain values and never retries, so it reads the DOM mid-render.
 - Lists rendered by the app are asserted with `expect(locator).toHaveText([...])`, which retries on both the element count and the texts.
@@ -43,6 +44,8 @@ _Reference context — observed facts and standing conventions for this project,
 - Stubbing `window.alert` and `window.confirm` inside a `playwright-cli eval` is the practical way to exercise the validation and confirmation paths; real dialogs block the evaluation.
 - Under `@playwright/test` a `page.on("dialog")` listener handles the app's alerts; without one Playwright dismisses every dialog.
 - Raw Playwright, unlike `@playwright/test`, dismisses no dialog on its own: a single `alert()` freezes the page and every later action waits for ever, so a script driving this app needs a `page.on("dialog")` handler.
+- `expenseError` rejects a date later than now, so a UTC-derived date would refuse every expense entered after 19:00 west of UTC, silently and with no crash.
+- Dropping one of two Playwright projects does not halve the wall clock: 344 tests across both zones ran in 34.5s, 172 in one zone in 46.7s, because the worker pool fills either way.
 - `just` has no file-timestamp dependency tracking, so `npm install` runs on every `test`, `test-browser` and `build-web` through the shared `deps` recipe, adding about 0.4s.
 - A `just` recipe runs each line in a separate shell unless it starts with a `#!/usr/bin/env bash` shebang, so a multi-line recipe carrying variables needs one.
 - Gradle in this sandbox fails at `:android:validateSigningDebug` with `?` in place of `$HOME` in the keystore path, and leaves a stray `?/` directory at the project root. Plain `gradle build` fails the same way, so it is not a build defect.
@@ -90,8 +93,11 @@ _Reference context — observed facts and standing conventions for this project,
 - Fraunces and DM Sans load from Google Fonts at runtime, so a device with no network falls back to a system serif and sans. Why: self-hosting them would make `just build-web` copy font files.
 - The Playwright suite serves the app from its own `web/e2e/server.js` rather than `just serve`. Why: `just serve` publishes the *built* assets, which would make the UI suite depend on a full Android build.
 - `web/e2e/server.js` maps the app's URL names straight onto `web/` and `node_modules`, so the UI suite needs no build step and exercises `index.html` unchanged.
-- The UI suite runs every spec twice, in Asia/Kolkata and America/New_York, as `just test` does. Why: the UI is full of dates, and a day that slips only west of the meridian must not pass unnoticed.
-- Expectations about "today" in the UI suite are computed in the page, not in Node. Why: only the browser context carries the project's timezone.
+- The Playwright suite runs one Chromium project, `phone`, with `timezoneId` pinned to Asia/Kolkata. Why: an unpinned zone makes dated tests follow the machine, while varying the zone belongs at the unit level, where it is cheaper and explicit.
+- Timezone coverage lives in `web/test/timezone.test.js`: five zones (UTC, Kolkata, New York, Kiritimati, Niue) crossed with four instants, over three end-to-end date properties. The rest of `just test` runs once, with `TZ` pinned.
+- `web/test/timezone.test.js` fixes the clock as well as the zone. Why: a UTC slip shows just after midnight or late in the evening, which are rarely the hours a suite is run at, so the old `TZ=... node --test` loop reached them only by luck.
+- Measured before the doubled runs were dropped: a `toIsoDate` UTC defect failed only 2 of 99 tests in the weaker of the two zones, where `timezone.test.js` fails 24 running in UTC alone. Why it matters: the loop's margin was thin, not generous.
+- Expectations about "today" in the UI suite are computed in the page, not in Node. Why: only the browser context carries the project's pinned timezone.
 - The Android bridge is exercised in the browser against a recording stand-in installed before load, not on a device. Why: it pins the JavaScript side of the contract, which is what a UI change can break.
 - The bridge contract the UI suite pins is `Android.createFile(filename, json)` and `Android.pickFile(callback)`.
 - The stand-in bridge in the UI suite leaves the Java side of `MainActivity` untested; that still needs an emulator run.
@@ -113,6 +119,7 @@ _Reference context — observed facts and standing conventions for this project,
 
 ## Open Questions
 
+- ? `add-expense.spec.js` "keeps fractional amounts to the cent" failed once in three UI-suite runs and passed on the repeats; whether it is a flake is unconfirmed, and the project's own rule asks for about 50 runs to tell.
 - ? Whether to self-host Fraunces and DM Sans rather than fetch them from Google Fonts is undecided; as it stands the app needs the network for its typefaces.
 - ? No screen totals a category across months; the header chips are per-month only.
 - ? Whether expense ids should stop being raw creation timestamps is undecided. A collision-free scheme has to preserve same-day sort order, which currently relies on ids increasing with creation time.

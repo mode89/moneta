@@ -3,10 +3,16 @@ import { defineConfig } from "@playwright/test";
 const PORT = Number(process.env.PORT ?? 8099);
 const BASE_URL = "http://127.0.0.1:" + PORT;
 
-// The app ships inside an Android WebView, so both projects are Chromium at a
-// phone viewport. They differ only in timezone: the unit tests run east and
-// west of UTC for the same reason, and the UI is full of dates.
-const phone = { viewport: { width: 412, height: 915 }, locale: "en-US" };
+// The app ships inside an Android WebView, so this is Chromium at a phone
+// viewport. The timezone is pinned so that dated tests do not depend on the
+// machine running them; Kolkata is east of UTC and off the hour, so it also
+// breaks whole-hour assumptions. The unit tests cover the date helpers on both
+// sides of the meridian.
+const phone = {
+  viewport: { width: 412, height: 915 },
+  locale: "en-US",
+  timezoneId: "Asia/Kolkata",
+};
 
 export default defineConfig({
   testDir: "./e2e",
@@ -21,14 +27,7 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   projects: [
-    {
-      name: "east-of-utc",
-      use: { ...phone, timezoneId: "Asia/Kolkata" },
-    },
-    {
-      name: "west-of-utc",
-      use: { ...phone, timezoneId: "America/New_York" },
-    },
+    { name: "phone", use: phone },
   ],
   webServer: {
     command: "node e2e/server.js " + PORT,

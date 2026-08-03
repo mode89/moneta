@@ -5,19 +5,12 @@ apk := "android/build/outputs/apk/debug/android-debug.apk"
 default:
     @just --list
 
-# Run the unit tests in web/test/, east and west of UTC.
+# Run the unit tests in web/test/.
 test: deps
-    #!/usr/bin/env bash
-    # Both timezones always run, so one failure still reports the other's
-    # results.
-    cd web
-    status=0
-    for tz in Asia/Kolkata America/New_York; do
-      echo "===================== TZ=${tz} ====================="
-      # A directory argument is read as a module path; only a glob selects the files.
-      TZ="${tz}" node --test "test/*.test.js" || status=$?
-    done
-    exit ${status}
+    # The zone is pinned so results do not follow the machine; test/timezone.test.js
+    # sets its own zones. A directory argument is read as a module path; only a
+    # glob selects the files.
+    cd web && TZ=Asia/Kolkata node --test "test/*.test.js"
 
 # Run the Playwright UI suite in web/e2e/; takes Playwright's own arguments.
 test-browser *args: deps
