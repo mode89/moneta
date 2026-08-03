@@ -673,13 +673,20 @@ export function parseCategories(input) {
     .sort();
 }
 
-// Every category the user has ever used, plus the ones this form already
-// carries, so a chip never disappears while it is selected.
+// Every category the user has ever used, the most recently spent on first and
+// ties broken by name, behind the ones this form carries that are new — so a
+// chip never disappears while it is selected.
 export function knownCategories(expenses, extra = []) {
-  const names = new Set(extra);
+  const lastSpent = new Map();
   for (const expense of expenses)
-    for (const category of expense.categories) names.add(category);
-  return [...names].sort();
+    for (const category of expense.categories)
+      if (!(lastSpent.get(category) >= expense.date))
+        lastSpent.set(category, expense.date);
+  const used = [...lastSpent.keys()].sort(
+    (one, other) =>
+      lastSpent.get(other) - lastSpent.get(one) || one.localeCompare(other),
+  );
+  return [...extra.filter((name) => !lastSpent.has(name)), ...used];
 }
 
 export function withCategoryToggled(input, category) {

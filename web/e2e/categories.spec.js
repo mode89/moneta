@@ -1,5 +1,6 @@
 // Categories are chosen from chips in the sheet: every category the user has
-// used, plus a `+ new` chip that becomes a text field in place.
+// used, most recently spent on first, plus a `+ new` chip that becomes a text
+// field in place.
 import { test, expect } from "./fixtures.js";
 
 const FEBRUARY = "2026-02-12T12:00:00Z";
@@ -26,7 +27,7 @@ test.describe("choosing categories", () => {
     await app.open({ now: FEBRUARY, expenses });
   });
 
-  test("offers every category used so far, sorted, and a way to add one", async ({
+  test("offers every category used so far and a way to add one", async ({
     app,
   }) => {
     await app.openNewExpense();
@@ -35,6 +36,21 @@ test.describe("choosing categories", () => {
       /food/,
       /shopping/,
       /travel/,
+      "+ new",
+    ]);
+  });
+
+  test("offers the most recently spent on category first", async ({ app }) => {
+    await app.openExpense("Groceries");
+    await app.fillForm({ date: "2026-02-10" });
+    await app.submit();
+
+    await app.openNewExpense();
+
+    await expect(app.categoryChips).toHaveText([
+      /travel/,
+      /food/,
+      /shopping/,
       "+ new",
     ]);
   });

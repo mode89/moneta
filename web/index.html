@@ -126,7 +126,15 @@
       }
 
       /* category chips */
-      .chiprow { display: flex; gap: 6px; flex-wrap: wrap; }
+      .chiprow {
+        display: flex;
+        gap: 6px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .chiprow::-webkit-scrollbar { display: none; }
+      .chiprow > * { flex: 0 0 auto; }
       .legend {
         display: flex;
         gap: 6px;

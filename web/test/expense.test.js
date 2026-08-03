@@ -217,7 +217,7 @@ describe("categoryInk", () => {
 });
 
 describe("knownCategories", () => {
-  test("collects every category used, sorted and without repeats", () => {
+  test("collects every category used, without repeats", () => {
     const expenses = [
       anExpense({ categories: ["food", "household"] }),
       anExpense({ categories: ["food"] }),
@@ -225,8 +225,49 @@ describe("knownCategories", () => {
     assert.deepEqual(knownCategories(expenses), ["food", "household"]);
   });
 
+  test("puts the most recently spent on first", () => {
+    const expenses = [
+      anExpense({ date: new Date(2026, 6, 1), categories: ["household"] }),
+      anExpense({ date: new Date(2026, 6, 20), categories: ["food"] }),
+      anExpense({ date: new Date(2026, 6, 10), categories: ["travel"] }),
+    ];
+    assert.deepEqual(knownCategories(expenses), [
+      "food",
+      "travel",
+      "household",
+    ]);
+  });
+
+  test("ranks a category by its newest expense", () => {
+    const expenses = [
+      anExpense({ date: new Date(2026, 6, 20), categories: ["food"] }),
+      anExpense({ date: new Date(2026, 6, 1), categories: ["travel"] }),
+      anExpense({ date: new Date(2026, 6, 25), categories: ["travel"] }),
+    ];
+    assert.deepEqual(knownCategories(expenses), ["travel", "food"]);
+  });
+
+  test("sorts categories spent on the same day by name", () => {
+    const expenses = [
+      anExpense({ categories: ["travel", "food", "household"] }),
+    ];
+    assert.deepEqual(knownCategories(expenses), [
+      "food",
+      "household",
+      "travel",
+    ]);
+  });
+
   test("includes the ones the open form carries", () => {
     assert.deepEqual(knownCategories([], ["cycling"]), ["cycling"]);
+  });
+
+  test("puts a category no expense uses yet ahead of the used ones", () => {
+    const expenses = [anExpense({ categories: ["food"] })];
+    assert.deepEqual(knownCategories(expenses, ["cycling", "food"]), [
+      "cycling",
+      "food",
+    ]);
   });
 });
 

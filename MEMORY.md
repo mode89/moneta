@@ -3,6 +3,7 @@ _Reference context — observed facts and standing conventions for this project,
 ## Architecture
 
 - The stored JSON shape (`id`, `amount`, `description`, `date` as `YYYY-MM-DD`, `categories`) is a compatibility boundary: it is what sits in users' `localStorage` on device and what export/import files carry. Changing it strands existing installs.
+- `knownCategories(expenses, extra)` orders the sheet's offered chips: names the form carries that no expense uses yet first, then used ones by newest expense date, ties by name. It ranks by `expense.date`, a `Date` in state.
 - Categories are kept sorted at every entry point: `parseCategories` sorts typed input and `parseExpenses` sorts what it reads. Views therefore join them without sorting, and importing rewrites a file's category order.
 - The Playwright suite in `web/e2e/` is the only written specification of the UI: its wording, grouping, totals, blur behaviour and dialog flows exist nowhere else in prose.
 - Every local-date read in `main.js` goes through the exported date helpers (`toIsoDate`, `parseIsoDate`, `formatDay`, `isSameMonth`, `beginningOfDay`, `groupByDay`); the component layer above them calls `new Date` only inside `now()`.
@@ -44,6 +45,7 @@ _Reference context — observed facts and standing conventions for this project,
 - `playwright-cli upload` fails on the import flow with "can only be used when there is related modal state present", because the `<input type=file>` is created and clicked programmatically.
 - Import can be driven in-page by patching `HTMLInputElement.prototype.click` to set `files` from a `DataTransfer` holding a `File`, then dispatching `change`.
 - Stubbing `window.alert` and `window.confirm` inside a `playwright-cli eval` is the practical way to exercise the validation and confirmation paths; real dialogs block the evaluation.
+- A UI test that saves an invalid expense leaves the sheet open, because Playwright dismisses the alert; the next action then fails on a control the sheet covers, far from the real cause.
 - Under `@playwright/test` a `page.on("dialog")` listener handles the app's alerts; without one Playwright dismisses every dialog.
 - Raw Playwright, unlike `@playwright/test`, dismisses no dialog on its own: a single `alert()` freezes the page and every later action waits for ever, so a script driving this app needs a `page.on("dialog")` handler.
 - `expenseError` rejects a date later than now, so a UTC-derived date would refuse every expense entered after 19:00 west of UTC, silently and with no crash.
@@ -79,7 +81,10 @@ _Reference context — observed facts and standing conventions for this project,
 - The list is unboxed — rows on paper divided by hairline rules — with the current month open and earlier months folded to one line carrying that month's count and total, refolded on every launch.
 - Day headings read "Today"/"Yesterday" only inside the open month and plain dates elsewhere; the header total stays on the current month while an older month is unfolded.
 - Category chips under the header act as filters, narrowing the header total, the average per day and the fold lines, with no status line naming the active filter.
-- The chip row is one horizontally scrolling line. Why: it is the only place every category is reachable and filterable.
+- The header chip row is one horizontally scrolling line. Why: it is the only place every category is reachable and filterable.
+- The add/edit sheet's category chips are one horizontally scrolling line too. Why: wrapping grew the sheet with the category count and pushed Save and Delete below the fold.
+- The sheet's chips are ordered by recency, not by name, and a chip the form just named leads them. Why: the left of a scrolling line is the only part seen without scrolling.
+- Chips selected in the sheet are not pinned to the front. Why: one ordering rule, and pinning makes chips jump position on every tap.
 - A category filter applies to older months as well, so unfolding one while a filter is on shows only its matching rows.
 - The add/edit dialog is a full bottom sheet, and it closes by tapping the dimmed area outside it, discarding silently. Why: back-button dismissal does not exist in a plain browser, where this UI is developed and tested.
 - The header shows month, total, expense count and average per day, with no eyebrow label above the month. Why: a label restates the month line and only carries information while filtering.
@@ -130,6 +135,7 @@ _Reference context — observed facts and standing conventions for this project,
 ## Open Questions
 
 - ? Whether to self-host Fraunces and DM Sans rather than fetch them from Google Fonts is undecided; as it stands the app needs the network for its typefaces.
+- ? Whether the sheet's `+ new` chip should become a typeahead that filters the offered chips is undecided; it is the only option weighed that scales past a scrolling line, and costs a filtered memo plus new tests.
 - ? No screen totals a category across months; the header chips are per-month only.
 - ? Whether expense ids should stop being raw creation timestamps is undecided. A collision-free scheme has to preserve same-day sort order, which currently relies on ids increasing with creation time.
 - ? The Android bridge paths (`Android.createFile`, `Android.pickFile`) have never been exercised on a device; only the browser branches are tested. They need an emulator run.
