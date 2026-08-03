@@ -172,6 +172,15 @@ export class MonetaApp {
         [STORAGE_KEY, JSON.stringify(expenses)],
       );
     if (android) await installAndroidBridge(this.page);
+    // index.html fetches its typefaces from Google. `goto` waits for the `load`
+    // event, which waits for that stylesheet, so a stalled request out on the
+    // public internet times the navigation out. Answering it here keeps the
+    // suite off the network; the app renders in the fallback faces, which no
+    // assertion depends on. An empty response, not an abort, since an aborted
+    // request is a console error and one spec allows none.
+    await this.page.route(/fonts\.(googleapis|gstatic)\.com/, (route) =>
+      route.fulfill({ status: 200, contentType: "text/css", body: "" }),
+    );
     await this.page.goto("/");
     await expect(this.header).toBeVisible();
   }

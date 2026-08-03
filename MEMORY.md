@@ -15,6 +15,7 @@ _Reference context — observed facts and standing conventions for this project,
 - A claim about an animation is settled by sampling `getComputedStyle` at fixed delays through a press, not by eye or screenshot. Why: mid-transition values pinpointed two press-state stutters that screenshots could not show.
 - A view with no suite coverage yet is checked by a throwaway Node script that seeds `localStorage`, fixes the clock and screenshots each state. Why: it sees what a locator assertion cannot.
 - A runtime npm dependency reaches the browser through three lists kept in step: the `cp` block in `build-web`, `FILES` in `web/e2e/server.js`, and the import map in `web/index.html`. Why: no bundler, so a missing entry is a blank page.
+- Long-running commands are given an explicit timeout. Why: a `nix-shell --run` that hung on a background server ran for 147 seconds before the user aborted it. How to apply: suite runs, builds, and anything that starts a server.
 - `just` recipes are run without asking the user first, Playwright included: they build, test, serve or drive a headless browser, all locally. Why: the user gave this standing permission after a Playwright run was queued for confirmation.
 - The UI suite reaches the app through `web/e2e/fixtures.js`, where locators live on the `MonetaApp` page object. Why: the app has no test hooks, so its markup is described in one place. How to apply: add locators there, not in a spec.
 - `MonetaApp` helpers that describe rendered content expose a locator, not an awaited snapshot. Why: `expect(await …).toEqual(…)` compares plain values and never retries, so it reads the DOM mid-render.
@@ -49,6 +50,9 @@ _Reference context — observed facts and standing conventions for this project,
 - `just` has no file-timestamp dependency tracking, so `npm install` runs on every `test`, `test-browser` and `build-web` through the shared `deps` recipe, adding about 0.4s.
 - A `just` recipe runs each line in a separate shell unless it starts with a `#!/usr/bin/env bash` shebang, so a multi-line recipe carrying variables needs one.
 - Gradle in this sandbox fails at `:android:validateSigningDebug` with `?` in place of `$HOME` in the keystore path, and leaves a stray `?/` directory at the project root. Plain `gradle build` fails the same way, so it is not a build defect.
+- `web/index.html` loads Fraunces and DM Sans from Google Fonts, so anything that opens the page waits on the public internet for the `load` event: `just serve`, a throwaway script, and the UI suite alike.
+- An external stall in the UI suite shows up as `page.goto` timing out, on a different spec each time; it struck 1 run in 10 until `fixtures.js` began answering the Google Fonts request itself.
+- A process started with `&` inside `nix-shell --run` holds the output pipe open, so the command never returns even once that process is killed. Redirecting the child's output to `/dev/null` releases it.
 - `pkill -f <pattern>` kills the shell running it when the pattern also appears in that shell's own command line; the run then ends with no output and no side effects at all.
 - Playwright's list and line reporters print the failed-test names *between* the "N failed" and "M passed" lines, so reading only the tail of a run shows a pass count and hides the failures above it.
 - A UI test that stops the clock and then adds several expenses gives them all one id, because ids are creation timestamps. `app.tick()` in the e2e fixtures moves a fixed clock forward between saves.
@@ -119,7 +123,6 @@ _Reference context — observed facts and standing conventions for this project,
 
 ## Open Questions
 
-- ? `add-expense.spec.js` "keeps fractional amounts to the cent" failed once in three UI-suite runs and passed on the repeats; whether it is a flake is unconfirmed, and the project's own rule asks for about 50 runs to tell.
 - ? Whether to self-host Fraunces and DM Sans rather than fetch them from Google Fonts is undecided; as it stands the app needs the network for its typefaces.
 - ? No screen totals a category across months; the header chips are per-month only.
 - ? Whether expense ids should stop being raw creation timestamps is undecided. A collision-free scheme has to preserve same-day sort order, which currently relies on ids increasing with creation time.
