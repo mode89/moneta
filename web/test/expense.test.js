@@ -127,7 +127,10 @@ describe("averagePerDay", () => {
 
 describe("totalOf", () => {
   test("adds the amounts, and is zero for nothing", () => {
-    assert.equal(totalOf([anExpense({ amount: 2.5 }), anExpense({ amount: 1 })]), 3.5);
+    assert.equal(
+      totalOf([anExpense({ amount: 2.5 }), anExpense({ amount: 1 })]),
+      3.5,
+    );
     assert.equal(totalOf([]), 0);
   });
 });
@@ -141,7 +144,10 @@ describe("filterByCategory", () => {
   });
 
   test("keeps everything when no category is active", () => {
-    assert.deepEqual(filterByCategory([groceries, bus], null), [groceries, bus]);
+    assert.deepEqual(filterByCategory([groceries, bus], null), [
+      groceries,
+      bus,
+    ]);
   });
 });
 
@@ -250,7 +256,11 @@ describe("deleteMessage", () => {
   test("names the expense being deleted", () => {
     assert.equal(
       deleteMessage(
-        anExpense({ amount: 310, description: "Electricity", date: new Date(2026, 6, 12) }),
+        anExpense({
+          amount: 310,
+          description: "Electricity",
+          date: new Date(2026, 6, 12),
+        }),
       ),
       "Electricity, $310.00 on 12 July. This cannot be undone.",
     );
@@ -266,19 +276,34 @@ describe("importMessage", () => {
   });
 
   test("speaks of a file it cannot name, as the Android picker gives none", () => {
-    assert.match(importMessage({ filename: null, count: 1 }, 2), /^This file holds 1 expense\./);
+    assert.match(
+      importMessage({ filename: null, count: 1 }, 2),
+      /^This file holds 1 expense\./,
+    );
   });
 
   test("claims nothing is lost when there is nothing to lose", () => {
-    assert.match(importMessage({ filename: "a.json", count: 3 }, 0), /replaces everything/);
+    assert.match(
+      importMessage({ filename: "a.json", count: 3 }, 0),
+      /replaces everything/,
+    );
   });
 });
 
 describe("isSameMonth", () => {
   test("compares year and month, ignoring the day", () => {
-    assert.equal(isSameMonth(new Date(2026, 1, 1), new Date(2026, 1, 28)), true);
-    assert.equal(isSameMonth(new Date(2026, 1, 1), new Date(2026, 2, 1)), false);
-    assert.equal(isSameMonth(new Date(2025, 1, 1), new Date(2026, 1, 1)), false);
+    assert.equal(
+      isSameMonth(new Date(2026, 1, 1), new Date(2026, 1, 28)),
+      true,
+    );
+    assert.equal(
+      isSameMonth(new Date(2026, 1, 1), new Date(2026, 2, 1)),
+      false,
+    );
+    assert.equal(
+      isSameMonth(new Date(2025, 1, 1), new Date(2026, 1, 1)),
+      false,
+    );
   });
 });
 
@@ -458,7 +483,10 @@ describe("expenseError", () => {
       expenseError({ ...validExpense(), date: daysFromToday(1) }),
       "Date cannot be in the future.",
     );
-    assert.equal(expenseError({ ...validExpense(), date: daysFromToday(-1) }), null);
+    assert.equal(
+      expenseError({ ...validExpense(), date: daysFromToday(-1) }),
+      null,
+    );
   });
 
   test("judges the future by the day, not the time of day", () => {
@@ -500,7 +528,10 @@ describe("a form on its way to becoming an expense", () => {
   });
 
   test("rejects a blank description", () => {
-    assert.equal(formError({ description: "   " }), "Description cannot be empty.");
+    assert.equal(
+      formError({ description: "   " }),
+      "Description cannot be empty.",
+    );
   });
 
   test("rejects an empty date field", () => {
@@ -530,7 +561,10 @@ describe("importedExpenseError", () => {
   });
 
   test("rejects a missing id", () => {
-    assert.equal(importedExpenseError({ ...validExpense(), id: undefined }), "Missing ID.");
+    assert.equal(
+      importedExpenseError({ ...validExpense(), id: undefined }),
+      "Missing ID.",
+    );
   });
 
   test("rejects an amount that is zero, negative, or not a number", () => {
@@ -611,7 +645,13 @@ describe("stored JSON format", () => {
   test("sorts the categories it reads, so display order needs no sorting", () => {
     const [expense] = parseExpenses(
       JSON.stringify([
-        { id: 1, amount: 3, description: "Coffee", date: "2026-02-12", categories: ["shopping", "food"] },
+        {
+          id: 1,
+          amount: 3,
+          description: "Coffee",
+          date: "2026-02-12",
+          categories: ["shopping", "food"],
+        },
       ]),
     );
     assert.deepEqual(expense.categories, ["food", "shopping"]);
@@ -619,7 +659,9 @@ describe("stored JSON format", () => {
 
   test("reads an expense with no categories field as having none", () => {
     const [expense] = parseExpenses(
-      JSON.stringify([{ id: 1, amount: 3, description: "Coffee", date: "2026-02-12" }]),
+      JSON.stringify([
+        { id: 1, amount: 3, description: "Coffee", date: "2026-02-12" },
+      ]),
     );
     assert.deepEqual(expense.categories, []);
   });
@@ -640,7 +682,10 @@ describe("stored JSON format", () => {
     );
     assert.equal(
       serializeExpenses(parseExpenses(unsorted)),
-      unsorted.replace('"shopping",\n      "food"', '"food",\n      "shopping"'),
+      unsorted.replace(
+        '"shopping",\n      "food"',
+        '"food",\n      "shopping"',
+      ),
     );
   });
 

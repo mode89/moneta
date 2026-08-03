@@ -104,7 +104,9 @@ test.describe("the expense list", () => {
     });
 
     const colourOf = (description) =>
-      app.dotOf(description).evaluate((dot) => getComputedStyle(dot).backgroundColor);
+      app
+        .dotOf(description)
+        .evaluate((dot) => getComputedStyle(dot).backgroundColor);
 
     expect(await colourOf("Dinner")).toBe(await colourOf("Lunch"));
     expect(await colourOf("Bus")).not.toBe(await colourOf("Lunch"));

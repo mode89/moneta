@@ -26,7 +26,8 @@ _Reference context — observed facts and standing conventions for this project,
 - A new development command is added as a `just` recipe rather than a script in `scripts/`. Why: `just --list` is the single index of what can be run here. How to apply: any build, test, serve or device task.
 - Design work is presented as five variations at a time, each naming its cost, in one self-contained static mockup file; the user locks in the pieces to keep. Why: costed alternatives converge faster than polishing a single option.
 - Behaviour changes carried along with a larger change are agreed with the user up front and reported individually afterwards. Why: otherwise a silent fix is indistinguishable from a mistake.
-- An edit is confirmed by re-reading the file, and a visual change by asserting the computed style in a browser, before it is reported as done. Why: an edit the tool reported as applied was later found absent, and the user hit the unfixed bug again.
+- An edit is confirmed by re-reading the file before it is reported as done. Why: an edit the tool reported as applied was later found absent, and the user hit the unfixed bug again.
+- A visual change is confirmed by asserting the computed style in a browser before it is reported as done.
 - A defect found mid-task that was not part of the agreed scope is reported, not fixed. Why: it keeps an agreed change set reviewable. How to apply: work around it in tests and hand the decision back.
 
 ## Gotchas
@@ -61,7 +62,8 @@ _Reference context — observed facts and standing conventions for this project,
 - Playwright's browsers come from Nix: `shell.nix` exports `PLAYWRIGHT_BROWSERS_PATH` to `pkgs.playwright.browsers`, and `just test-browser` downloads nothing.
 - `shell.nix` exports `FONTCONFIG_FILE` via `pkgs.makeFontsConf`. Why: with no fontconfig config Chromium aborts in Skia ("SkFontMgr_FontConfigInterface.cpp: Not implemented") on the first text it shapes.
 - A Chromium that dies mid-test reports as "Target page, context or browser has been closed" on whatever locator call was in flight; the real cause is the last `[pid=...][err]` line in the browser log.
-- `web/node_modules/playwright` is a 1.62 alpha pulled in by `@playwright/cli`, and its Chromium build is absent from the Nix browser set. A script outside the suite imports `chromium` from `web/node_modules/@playwright/test/node_modules/playwright`.
+- `web/node_modules/playwright` is a 1.62 alpha pulled in by `@playwright/cli`, and its Chromium build is absent from the Nix browser set.
+- A script outside the UI suite imports `chromium` from `web/node_modules/@playwright/test/node_modules/playwright`, the copy whose browser build the Nix set holds.
 - `@playwright/test` in `web/package.json` is pinned exact to the nixpkgs `playwright-driver` version, 1.59.1 as of July 2026.
 - A Playwright release and a Chromium build number are a matched pair; when the npm version and the Nix browser set disagree, every test fails at launch with "Executable doesn't exist" naming a build absent from the store path.
 - A nixpkgs bump that moves `playwright-driver` re-breaks the suite until `@playwright/test` is re-pinned to match; `nix-instantiate --eval -E 'with import <nixpkgs> {}; playwright-driver.version'` reads the version to pin to.
@@ -109,6 +111,9 @@ _Reference context — observed facts and standing conventions for this project,
 - `scripts/` holds only `emulator` after the five bash scripts were absorbed into `just` recipes. Why: it is Python and too large to inline in a recipe.
 - `just build` splits into `build-web` and `build-android`, and `serve` depends only on `build-web`. Why: serving the app then needs no Gradle run, so it refreshes the assets itself and never shows stale ones.
 - `just install` checks for an attached device before building, so it calls `just build` inside the recipe instead of declaring it a dependency. Why: a missing device then costs a second rather than a minute.
+- Linting is ESLint (flat config, recommended rules) plus Prettier, chosen over Biome and oxlint. Why: Prettier's defaults already matched the hand-written style, so the one-off reformat of `web/` changed only 135 lines across 12 files.
+- Linting is on demand through `just lint`; no build or test recipe runs it. Why: the user asked for a recipe, not a gate.
+- `web/.prettierrc` writes out 2-space indentation, no tabs and an 80-column width although all three are Prettier's defaults. Why: a Prettier upgrade then cannot move them silently.
 
 ## Dead Ends
 
@@ -119,6 +124,7 @@ _Reference context — observed facts and standing conventions for this project,
 - ✗ A "Discard this expense?" confirmation on closing the add/edit dialog was designed and then dropped as noise for what is usually an empty form.
 - ✗ direnv with `scripts/` on `PATH` as the command front door was rejected: direnv is not used here, and `test` and `install` collide with a shell builtin and a coreutils binary.
 - ✗ A Makefile and a `./dev` dispatcher script were both rejected as the development front door: Make passes arguments only as `ARGS=`, and the dispatcher earned its keep only by hiding `nix-shell`, which is entered anyway.
+- ✗ Leaving Prettier's `embeddedLanguageFormatting` on was abandoned: it reads the `html` tagged templates as HTML and re-indents the Solid markup, changing 369 lines of `main.js` against 28 with it off.
 - ✗ Moving `shell.nix` to a flake with `nix run .#…` apps was weighed and dropped: it types longer rather than shorter, and re-opens the `playwright-driver` version pinning.
 
 ## Open Questions

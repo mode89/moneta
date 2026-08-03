@@ -87,7 +87,8 @@ function App() {
         />`;
       }}
       ${() =>
-        saveNotice() && html`<div class="notice" role="status">${saveNotice()}</div>`}
+        saveNotice() &&
+        html`<div class="notice" role="status">${saveNotice()}</div>`}
     </div>`;
 }
 
@@ -133,7 +134,9 @@ function MonthSummary() {
 // the whole list; tapping the selected one clears the filter.
 function CategoryLegend() {
   const totals = createMemo(() =>
-    categoryTotals(expenses.filter((expense) => isSameMonth(expense.date, now()))),
+    categoryTotals(
+      expenses.filter((expense) => isSameMonth(expense.date, now())),
+    ),
   );
   return html`
     <div class="legend">
@@ -213,8 +216,10 @@ function ExpenseRow(props) {
       ></i>
       <div>
         <div class="desc">${expense.description}</div>
-        ${expense.categories.length > 0 &&
-        html`<div class="cats">${expense.categories.join(" · ")}</div>`}
+        ${
+          expense.categories.length > 0 &&
+          html`<div class="cats">${expense.categories.join(" · ")}</div>`
+        }
       </div>
       <div class="amt" onClick=${revealOnly}>
         <${Amount} value=${() => expense.amount} format=${plainAmount} />
@@ -514,7 +519,12 @@ export function expenseError(expense) {
 // A form holds what the user typed; expenseFromForm is the only place it
 // becomes an expense.
 export function blankExpenseForm() {
-  return { amount: "", description: "", date: toIsoDate(now()), categories: "" };
+  return {
+    amount: "",
+    description: "",
+    date: toIsoDate(now()),
+    categories: "",
+  };
 }
 
 export function formFromExpense(expense) {
@@ -554,7 +564,9 @@ function exportExpenses() {
     Android.createFile(filename, json);
     return;
   }
-  const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+  const url = URL.createObjectURL(
+    new Blob([json], { type: "application/json" }),
+  );
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;
@@ -775,7 +787,9 @@ export function formatMonth(date) {
 
 // Day and month in that order, whatever the browser's locale would prefer.
 export function formatDate(date) {
-  return date.getDate() + " " + date.toLocaleString("default", { month: "long" });
+  return (
+    date.getDate() + " " + date.toLocaleString("default", { month: "long" })
+  );
 }
 
 export function formatDay(date, reference) {

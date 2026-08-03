@@ -124,11 +124,7 @@ test.describe("filtering by category", () => {
     await app.legendChip("food").click();
 
     await expect(app.legendChip("food")).not.toHaveClass(/on/);
-    await expect(app.listedDescriptions).toHaveText([
-      "Lunch",
-      "Bus",
-      "Dinner",
-    ]);
+    await expect(app.listedDescriptions).toHaveText(["Lunch", "Bus", "Dinner"]);
     await expect(app.totalSpent).toHaveText("$35.00");
   });
 

@@ -37,7 +37,9 @@ test.describe("the settings screen", () => {
     await expect(app.exportRow).toContainText(
       "Save a JSON file you can keep or move",
     );
-    await expect(app.importRow).toContainText("Replaces everything on this device");
+    await expect(app.importRow).toContainText(
+      "Replaces everything on this device",
+    );
   });
 
   test("shows the build version", async ({ app }) => {

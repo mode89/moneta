@@ -16,6 +16,15 @@ test: deps
 test-browser *args: deps
     cd web && npx playwright test {{ args }}
 
+# Check the JavaScript in web/ with ESLint and Prettier.
+lint: deps
+    cd web && npx eslint .
+    cd web && npx prettier --check .
+
+# Reformat the JavaScript in web/ with Prettier.
+format: deps
+    cd web && npx prettier --write .
+
 # Serve the web app on port 8080 for browser-based iteration.
 serve: build-web
     cd android/src/main/assets/web && python3 -m http.server 8080

@@ -22,7 +22,10 @@ test.describe("adding an expense", () => {
     await app.openNewExpense();
 
     await expect(page.getByLabel("Amount")).toHaveAttribute("type", "number");
-    await expect(page.getByLabel("Description")).toHaveAttribute("type", "text");
+    await expect(page.getByLabel("Description")).toHaveAttribute(
+      "type",
+      "text",
+    );
     await expect(page.getByLabel("Date")).toHaveAttribute("type", "date");
     await expect(app.amountInput).toHaveAttribute("placeholder", "0.00");
     await expect(app.amountInput).toHaveAttribute("step", "0.01");

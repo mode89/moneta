@@ -263,7 +263,8 @@ export class MonetaApp {
   // Leaves exactly the named categories selected, naming any the user has
   // never used before through the `+ new` chip.
   async setCategories(text) {
-    const wanted = text.trim() === "" ? [] : text.trim().toLowerCase().split(/\s+/);
+    const wanted =
+      text.trim() === "" ? [] : text.trim().toLowerCase().split(/\s+/);
     const selected = this.categoryChips.filter({ hasText: "✕" });
     for (let count = await selected.count(); count > 0; count -= 1)
       await selected.first().click();

@@ -26,9 +26,7 @@ export default defineConfig({
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
-  projects: [
-    { name: "phone", use: phone },
-  ],
+  projects: [{ name: "phone", use: phone }],
   webServer: {
     command: "node e2e/server.js " + PORT,
     url: BASE_URL,

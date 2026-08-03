@@ -92,12 +92,18 @@ describe("addExpense", () => {
 
 describe("updateExpense", () => {
   beforeEach(() => {
-    seed(expense({ id: 1, description: "First" }), expense({ id: 2, description: "Second" }));
+    seed(
+      expense({ id: 1, description: "First" }),
+      expense({ id: 2, description: "Second" }),
+    );
   });
 
   test("replaces the fields of the matching expense", () => {
     const id = expenses[0].id;
-    updateExpense(id, filledIn({ amount: "99", description: "Rent", categories: "" }));
+    updateExpense(
+      id,
+      filledIn({ amount: "99", description: "Rent", categories: "" }),
+    );
     const updated = findExpense(id);
     assert.equal(updated.amount, 99);
     assert.equal(updated.description, "Rent");
@@ -140,7 +146,10 @@ describe("updateExpense", () => {
 
 describe("deleteExpense", () => {
   test("removes only the matching expense and persists", () => {
-    seed(expense({ id: 1, description: "First" }), expense({ id: 2, description: "Second" }));
+    seed(
+      expense({ id: 1, description: "First" }),
+      expense({ id: 2, description: "Second" }),
+    );
     deleteExpense(expenses[0].id);
     assert.deepEqual(
       expenses.map((each) => each.description),
@@ -211,7 +220,9 @@ describe("the Saved notice", () => {
 describe("replaceExpensesFromJson", () => {
   test("replaces the current expenses and persists them", () => {
     addExpense(filledIn({ description: "Existing" }));
-    replaceExpensesFromJson(JSON.stringify([expense({ description: "Imported" })]));
+    replaceExpensesFromJson(
+      JSON.stringify([expense({ description: "Imported" })]),
+    );
     assert.deepEqual(
       expenses.map((each) => each.description),
       ["Imported"],
@@ -234,7 +245,9 @@ describe("replaceExpensesFromJson", () => {
     mock.method(console, "error", () => {});
     addExpense(filledIn({ description: "Existing" }));
     const before = storedExpenses();
-    replaceExpensesFromJson(JSON.stringify([expense(), expense({ id: 2, amount: -1 })]));
+    replaceExpensesFromJson(
+      JSON.stringify([expense(), expense({ id: 2, amount: -1 })]),
+    );
     assert.deepEqual(alerts, ["File contains errors."]);
     assert.deepEqual(
       expenses.map((each) => each.description),
@@ -246,7 +259,10 @@ describe("replaceExpensesFromJson", () => {
   test("reports every problem it found to the console", () => {
     const logged = mock.method(console, "error", () => {});
     replaceExpensesFromJson(
-      JSON.stringify([expense({ amount: -1 }), expense({ id: 2, description: "" })]),
+      JSON.stringify([
+        expense({ amount: -1 }),
+        expense({ id: 2, description: "" }),
+      ]),
     );
     assert.deepEqual(
       logged.mock.calls.map((call) => call.arguments[0]),

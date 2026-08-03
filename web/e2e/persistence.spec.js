@@ -96,9 +96,9 @@ test.describe("keeping expenses on the device", () => {
     await app.open({ now: FEBRUARY });
     await app.addExpense({ amount: "5", description: "Bus" });
 
-    expect(await page.evaluate(() => Object.keys(window.localStorage))).toEqual([
-      "expenses",
-    ]);
+    expect(await page.evaluate(() => Object.keys(window.localStorage))).toEqual(
+      ["expenses"],
+    );
   });
 
   test("keeps no record of what was revealed, filtered or unfolded", async ({
@@ -114,9 +114,9 @@ test.describe("keeping expenses on the device", () => {
     await app.legendChip("food").click();
     await app.foldLine("January 2026").click();
 
-    expect(await page.evaluate(() => Object.keys(window.localStorage))).toEqual([
-      "expenses",
-    ]);
+    expect(await page.evaluate(() => Object.keys(window.localStorage))).toEqual(
+      ["expenses"],
+    );
   });
 
   test("starts empty on a device that has never saved", async ({ app }) => {

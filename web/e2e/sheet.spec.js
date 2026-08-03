@@ -67,7 +67,10 @@ test.describe("the expense sheet", () => {
     await app.openNewExpense();
 
     await expect(app.scrim).toBeVisible();
-    await expect(app.scrim).toHaveCSS("background-color", "rgba(47, 42, 42, 0.42)");
+    await expect(app.scrim).toHaveCSS(
+      "background-color",
+      "rgba(47, 42, 42, 0.42)",
+    );
   });
 
   test("closes when the dim is tapped, without opening anything else", async ({
@@ -81,10 +84,7 @@ test.describe("the expense sheet", () => {
     await expect(app.scrim).toHaveCount(0);
   });
 
-  test("ignores Escape, which a phone does not send", async ({
-    app,
-    page,
-  }) => {
+  test("ignores Escape, which a phone does not send", async ({ app, page }) => {
     await app.openNewExpense();
 
     await page.keyboard.press("Escape");
