@@ -52,7 +52,7 @@ test.describe("editing an expense", () => {
     await app.submit();
 
     await expect(app.modal).toHaveCount(0);
-    expect(await app.listedDescriptions()).toEqual([
+    await expect(app.listedDescriptions).toHaveText([
       "Coffee",
       "Big groceries",
     ]);
@@ -91,7 +91,7 @@ test.describe("editing an expense", () => {
     await expect(app.expensesOf("2026-02-10")).toHaveCount(1);
     await expect(app.dayTotal("2026-02-12")).toHaveText("$12.50");
     await expect(app.dayTotal("2026-02-10")).toHaveText("$3.25");
-    expect(await app.listedDays()).toEqual(["2026-02-12", "2026-02-10"]);
+    await expect(app.listedDays).toHaveText(["2026-02-12", "2026-02-10"]);
   });
 
   test("can clear the categories", async ({ app }) => {

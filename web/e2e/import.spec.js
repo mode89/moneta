@@ -50,7 +50,7 @@ test.describe("importing expenses", () => {
   test("groups and totals what it imported", async ({ app }) => {
     await importFile(app, { content: json(imported) });
 
-    expect(await app.listedDays()).toEqual(["2026-02-12", "2026-02-11"]);
+    await expect(app.listedDays).toHaveText(["2026-02-12", "2026-02-11"]);
     await expect(app.dayTotal("2026-02-12")).toHaveText("$7.50");
     await expect(app.dayTotal("2026-02-11")).toHaveText("$5.00");
     await expect(app.totalSpent).toHaveText("$12.50");

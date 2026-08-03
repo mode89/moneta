@@ -11,6 +11,9 @@ _Reference context — observed facts and standing conventions for this project,
 - UI changes are verified in a real browser via `scripts/e2e`, the Playwright suite in `web/e2e/` (July 2026); the Node unit tests cover only the domain layer. Why: nothing else catches wiring errors with no compile step.
 - Exploratory poking at the UI goes through `scripts/serve` plus `playwright-cli`, outside the Playwright suite.
 - The UI suite reaches the app through `web/e2e/fixtures.js`, where locators live on the `MonetaApp` page object. Why: the app has no test hooks, so its markup is described in one place. How to apply: add locators there, not in a spec.
+- `MonetaApp` helpers that describe rendered content expose a locator, not an awaited snapshot. Why: `expect(await …).toEqual(…)` compares plain values and never retries, so it reads the DOM mid-render.
+- Lists rendered by the app are asserted with `expect(locator).toHaveText([...])`, which retries on both the element count and the texts.
+- A change to the UI suite's timing is judged by running the whole suite ~50 times, not once. Why: the one flake found this way struck 2 runs in 50, which ten runs had called clean.
 - Anything that must exist before `main()` runs — seeded expenses, a fixed clock, the `Android` bridge — is installed by `app.open()` in `web/e2e/fixtures.js`.
 - Design rounds offer five variations at a time, each naming its cost; the user locks in pieces to keep. Why: costed alternatives converge faster than polishing one. How to apply: rewrite `design.html` each round rather than patching one option.
 - Behaviour changes bundled into a refactor are agreed with the user up front and reported individually afterwards. Why: in a port, a silent fix is indistinguishable from a porting error. How to apply: name each fix when handing back the work.
@@ -22,7 +25,9 @@ _Reference context — observed facts and standing conventions for this project,
 - `playwright-cli click` against this app reports "performing click action" and then stalls without the click taking effect. Driving the DOM through `playwright-cli eval` with `element.click()` works reliably.
 - `playwright-cli upload` fails on the import flow with "can only be used when there is related modal state present", because the `<input type=file>` is created and clicked programmatically.
 - Import can be driven in-page by patching `HTMLInputElement.prototype.click` to set `files` from a `DataTransfer` holding a `File`, then dispatching `change`.
-- Stubbing `window.alert` and `window.confirm` inside a `playwright-cli eval` is the practical way to exercise the validation and delete-confirmation paths; real dialogs block the evaluation. Under `@playwright/test` a `page.on("dialog")` listener does the same job, and without one Playwright dismisses every dialog — which reads as "no" to the delete confirmation.
+- Stubbing `window.alert` and `window.confirm` inside a `playwright-cli eval` is the practical way to exercise the validation and delete-confirmation paths; real dialogs block the evaluation.
+- Under `@playwright/test` a `page.on("dialog")` listener handles the app's alerts and confirms; without one Playwright dismisses every dialog, which reads as "no" to the delete confirmation.
+- Playwright's list and line reporters print the failed-test names *between* the "N failed" and "M passed" lines, so reading only the tail of a run shows a pass count and hides the failures above it.
 - A UI test that stops the clock and then adds several expenses gives them all one id, because ids are creation timestamps. `app.tick()` in the e2e fixtures moves a fixed clock forward between saves.
 - A `page.addInitScript` that seeds `localStorage` runs again on reload, so it has to write only when the key is absent; otherwise a reload restores the seed and hides what the app saved.
 - Playwright's browsers come from Nix: `shell.nix` exports `PLAYWRIGHT_BROWSERS_PATH` to `pkgs.playwright.browsers`, and `scripts/e2e` downloads nothing.

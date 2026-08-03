@@ -183,6 +183,6 @@ test.describe("adding an expense", () => {
     await expect(app.dayTotal(today)).toHaveText("$12.25");
     await expect(app.totalSpent).toHaveText("$12.25");
     // Ids are creation timestamps and a day lists the newest first.
-    expect(await app.listedDescriptions()).toEqual(["Coffee", "Lunch"]);
+    await expect(app.listedDescriptions).toHaveText(["Coffee", "Lunch"]);
   });
 });

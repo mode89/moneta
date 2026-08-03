@@ -132,14 +132,12 @@ export class MonetaApp {
   }
 
   // The descriptions in the order they are rendered, days and all.
-  async listedDescriptions() {
-    return this.expenseItems.locator("div > span").allInnerTexts();
+  get listedDescriptions() {
+    return this.expenseItems.locator("div > span");
   }
 
-  async listedDays() {
-    return this.expenseCard
-      .locator("li.bg-light > strong > span:first-child")
-      .allInnerTexts();
+  get listedDays() {
+    return this.expenseCard.locator("li.bg-light > strong > span:first-child");
   }
 
   // --- driving the page -----------------------------------------------

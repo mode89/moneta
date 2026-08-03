@@ -20,12 +20,12 @@ test.describe("the expense list", () => {
     });
 
     await expect(app.dayGroups).toHaveCount(3);
-    expect(await app.listedDays()).toEqual([
+    await expect(app.listedDays).toHaveText([
       "2026-02-14",
       "2026-02-12",
       "2026-02-10",
     ]);
-    expect(await app.listedDescriptions()).toEqual([
+    await expect(app.listedDescriptions).toHaveText([
       "Newest",
       "Middle",
       "Older",
@@ -42,7 +42,7 @@ test.describe("the expense list", () => {
     });
 
     await expect(app.expensesOf("2026-02-12")).toHaveCount(3);
-    expect(await app.listedDescriptions()).toEqual([
+    await expect(app.listedDescriptions).toHaveText([
       "Third",
       "Second",
       "First",
@@ -97,7 +97,7 @@ test.describe("the expense list", () => {
       ],
     });
 
-    expect(await app.listedDays()).toEqual(["2026-02-01", "2026-01-31"]);
+    await expect(app.listedDays).toHaveText(["2026-02-01", "2026-01-31"]);
   });
 
   test("survives a long history", async ({ app }) => {

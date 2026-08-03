@@ -33,8 +33,8 @@ test("a week of spending, exported and imported back", async ({
   });
 
   await expect(app.expenseItems).toHaveCount(3);
-  expect(await app.listedDays()).toEqual(["2026-02-12", "2026-02-09"]);
-  expect(await app.listedDescriptions()).toEqual([
+  await expect(app.listedDays).toHaveText(["2026-02-12", "2026-02-09"]);
+  await expect(app.listedDescriptions).toHaveText([
     "Cinema",
     "Coffee",
     "Weekly shop",
