@@ -2,21 +2,47 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  averagePerDay,
   beginningOfDay,
   blankExpenseForm,
+  categoryInk,
+  categoryTotals,
+  deleteMessage,
   expenseError,
+  expenseNoun,
   expenseFromForm,
+  filterByCategory,
   formFromExpense,
   formatCurrency,
+  formatDate,
   formatDay,
+  formatMonth,
+  groupByDay,
+  groupByMonth,
+  importMessage,
   importedExpenseError,
   isSameMonth,
+  knownCategories,
+  monthKey,
   parseCategories,
   parseExpenses,
   parseIsoDate,
+  plainAmount,
+  roundedCurrency,
   serializeExpenses,
   toIsoDate,
+  totalOf,
+  withCategoryToggled,
 } from "../main.js";
+
+const anExpense = (overrides) => ({
+  id: 1,
+  amount: 10,
+  description: "Coffee",
+  date: new Date(2026, 6, 14),
+  categories: [],
+  ...overrides,
+});
 
 const today = () => beginningOfDay(new Date());
 const daysFromToday = (days) => {
@@ -50,8 +76,201 @@ describe("parseIsoDate", () => {
 });
 
 describe("formatDay", () => {
-  test("renders a day heading", () => {
-    assert.equal(formatDay(new Date(2026, 1, 12)), "2026-02-12");
+  const reference = new Date(2026, 6, 14, 9, 30);
+
+  test("names the two days a person thinks of by name", () => {
+    assert.equal(formatDay(new Date(2026, 6, 14), reference), "Today");
+    assert.equal(formatDay(new Date(2026, 6, 13), reference), "Yesterday");
+  });
+
+  test("gives every other day its date", () => {
+    assert.equal(formatDay(new Date(2026, 6, 12), reference), "12 July");
+  });
+
+  test("reads yesterday across a month boundary", () => {
+    const firstOfJuly = new Date(2026, 6, 1, 9, 30);
+    assert.equal(formatDay(new Date(2026, 5, 30), firstOfJuly), "Yesterday");
+  });
+});
+
+describe("formatDate", () => {
+  test("puts the day before the month and drops the year", () => {
+    assert.equal(formatDate(new Date(2026, 1, 5)), "5 February");
+  });
+});
+
+describe("formatMonth", () => {
+  test("names the month and its year", () => {
+    assert.equal(formatMonth(new Date(2026, 6, 14)), "July 2026");
+  });
+});
+
+describe("monthKey", () => {
+  test("identifies a month by year and number, so months sort as text", () => {
+    assert.equal(monthKey(new Date(2026, 6, 14)), "2026-07");
+    assert.ok(monthKey(new Date(2026, 6, 1)) > monthKey(new Date(2026, 5, 30)));
+  });
+});
+
+describe("averagePerDay", () => {
+  test("divides the current month by the days elapsed so far", () => {
+    const today = new Date(2026, 6, 14, 18, 0);
+    assert.equal(averagePerDay(1400, today, today), 100);
+  });
+
+  test("divides an earlier month by its whole length", () => {
+    const june = new Date(2026, 5, 12);
+    const july = new Date(2026, 6, 14);
+    assert.equal(averagePerDay(3000, june, july), 100);
+  });
+});
+
+describe("totalOf", () => {
+  test("adds the amounts, and is zero for nothing", () => {
+    assert.equal(totalOf([anExpense({ amount: 2.5 }), anExpense({ amount: 1 })]), 3.5);
+    assert.equal(totalOf([]), 0);
+  });
+});
+
+describe("filterByCategory", () => {
+  const groceries = anExpense({ id: 1, categories: ["food", "household"] });
+  const bus = anExpense({ id: 2, categories: ["transport"] });
+
+  test("keeps the expenses carrying the category", () => {
+    assert.deepEqual(filterByCategory([groceries, bus], "food"), [groceries]);
+  });
+
+  test("keeps everything when no category is active", () => {
+    assert.deepEqual(filterByCategory([groceries, bus], null), [groceries, bus]);
+  });
+});
+
+describe("groupByMonth", () => {
+  test("groups by calendar month, newest month first", () => {
+    const july = anExpense({ id: 1, date: new Date(2026, 6, 2) });
+    const alsoJuly = anExpense({ id: 2, date: new Date(2026, 6, 30) });
+    const june = anExpense({ id: 3, date: new Date(2026, 5, 12) });
+    const months = groupByMonth([june, july, alsoJuly]);
+    assert.deepEqual(
+      months.map((month) => [month.key, month.expenses.length]),
+      [
+        ["2026-07", 2],
+        ["2026-06", 1],
+      ],
+    );
+  });
+});
+
+describe("groupByDay", () => {
+  test("groups by day, newest day and newest expense first", () => {
+    const older = anExpense({ id: 1, date: new Date(2026, 6, 14, 10) });
+    const newer = anExpense({ id: 2, date: new Date(2026, 6, 14, 10) });
+    const earlierDay = anExpense({ id: 3, date: new Date(2026, 6, 12) });
+    const days = groupByDay([earlierDay, older, newer]);
+    assert.deepEqual(
+      days.map((day) => [toIsoDate(day.date), day.expenses.map((e) => e.id)]),
+      [
+        ["2026-07-14", [2, 1]],
+        ["2026-07-12", [3]],
+      ],
+    );
+  });
+});
+
+describe("categoryTotals", () => {
+  test("totals each category, largest first, ties by name", () => {
+    const expenses = [
+      anExpense({ amount: 40, categories: ["food", "household"] }),
+      anExpense({ amount: 60, categories: ["food"] }),
+      anExpense({ amount: 40, categories: ["bills"] }),
+    ];
+    assert.deepEqual(categoryTotals(expenses), [
+      { name: "food", total: 100 },
+      { name: "bills", total: 40 },
+      { name: "household", total: 40 },
+    ]);
+  });
+
+  test("ignores expenses with no categories", () => {
+    assert.deepEqual(categoryTotals([anExpense({})]), []);
+  });
+});
+
+describe("categoryInk", () => {
+  test("gives a name the same ink every time", () => {
+    assert.equal(categoryInk("food"), categoryInk("food"));
+  });
+
+  test("only ever answers with one of the six inks", () => {
+    const inks = new Set();
+    for (const name of ["food", "bills", "fun", "transport", "health", "x", ""])
+      inks.add(categoryInk(name));
+    for (const ink of inks) assert.match(ink, /^#[0-9a-f]{6}$/);
+    assert.ok(inks.size <= 6);
+  });
+});
+
+describe("knownCategories", () => {
+  test("collects every category used, sorted and without repeats", () => {
+    const expenses = [
+      anExpense({ categories: ["food", "household"] }),
+      anExpense({ categories: ["food"] }),
+    ];
+    assert.deepEqual(knownCategories(expenses), ["food", "household"]);
+  });
+
+  test("includes the ones the open form carries", () => {
+    assert.deepEqual(knownCategories([], ["cycling"]), ["cycling"]);
+  });
+});
+
+describe("withCategoryToggled", () => {
+  test("adds a category the form does not carry", () => {
+    assert.equal(withCategoryToggled("food", "bills"), "bills food");
+  });
+
+  test("removes one it does", () => {
+    assert.equal(withCategoryToggled("bills food", "food"), "bills");
+  });
+
+  test("adds to an empty form", () => {
+    assert.equal(withCategoryToggled("", "food"), "food");
+  });
+});
+
+describe("expenseNoun", () => {
+  test("counts one expense in the singular", () => {
+    assert.equal(expenseNoun(1), "expense");
+    assert.equal(expenseNoun(0), "expenses");
+    assert.equal(expenseNoun(14), "expenses");
+  });
+});
+
+describe("deleteMessage", () => {
+  test("names the expense being deleted", () => {
+    assert.equal(
+      deleteMessage(
+        anExpense({ amount: 310, description: "Electricity", date: new Date(2026, 6, 12) }),
+      ),
+      "Electricity, $310.00 on 12 July. This cannot be undone.",
+    );
+  });
+});
+
+describe("importMessage", () => {
+  test("names the file and what it replaces", () => {
+    assert.equal(
+      importMessage({ filename: "moneta.json", count: 96 }, 14),
+      "moneta.json holds 96 expenses. Importing removes the 14 expenses on this device and cannot be undone.",
+    );
+  });
+
+  test("speaks of a file it cannot name, as the Android picker gives none", () => {
+    assert.match(importMessage({ filename: null, count: 1 }, 2), /^This file holds 1 expense\./);
+  });
+
+  test("claims nothing is lost when there is nothing to lose", () => {
+    assert.match(importMessage({ filename: "a.json", count: 3 }, 0), /replaces everything/);
   });
 });
 
@@ -76,6 +295,24 @@ describe("formatCurrency", () => {
   test("rounds to the nearest cent", () => {
     assert.equal(formatCurrency(1.005), "$1.00");
     assert.equal(formatCurrency(2.346), "$2.35");
+  });
+
+  test("groups thousands", () => {
+    assert.equal(formatCurrency(1284.6), "$1,284.60");
+  });
+});
+
+describe("roundedCurrency", () => {
+  test("drops the cents, for chips that carry the shape of a month", () => {
+    assert.equal(roundedCurrency(528.1), "$528");
+    assert.equal(roundedCurrency(1284.6), "$1,285");
+  });
+});
+
+describe("plainAmount", () => {
+  test("drops the dollar sign and the sign, for rows under a heading", () => {
+    assert.equal(plainAmount(42.1), "42.10");
+    assert.equal(plainAmount(-42.1), "42.10");
   });
 });
 

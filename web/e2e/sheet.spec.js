@@ -1,5 +1,5 @@
-// How the dialog itself behaves: real typing rather than `fill`, the backdrop,
-// and the keys a phone keyboard sends.
+// How the sheet itself behaves: real typing rather than `fill`, the dim that is
+// the only way out of it, and the keys a phone keyboard sends.
 import { test, expect } from "./fixtures.js";
 
 const groceries = {
@@ -10,7 +10,7 @@ const groceries = {
   categories: ["food"],
 };
 
-test.describe("the expense dialog", () => {
+test.describe("the expense sheet", () => {
   test.beforeEach(async ({ app }) => {
     await app.open({ now: "2026-02-12T12:00:00Z", expenses: [groceries] });
   });
@@ -20,11 +20,11 @@ test.describe("the expense dialog", () => {
 
     await app.amountInput.pressSequentially("7.25");
     await app.descriptionInput.pressSequentially("Cinema");
-    await app.categoriesInput.pressSequentially("fun");
+    await app.nameCategory("fun");
     await app.submit();
 
-    await expect(app.modal).toHaveCount(0);
-    await expect(app.amountOf("Cinema")).toHaveText("-$7.25");
+    await expect(app.sheet).toHaveCount(0);
+    await expect(app.amountOf("Cinema")).toHaveText("7.25");
     await expect(app.categoriesOf("Cinema")).toHaveText("fun");
   });
 
@@ -59,63 +59,61 @@ test.describe("the expense dialog", () => {
     await app.descriptionInput.fill("Cinema");
     await app.descriptionInput.press("Enter");
 
-    await expect(app.modal).toBeVisible();
+    await expect(app.sheet).toBeVisible();
     expect(await page.evaluate(() => window.__stillHere)).toBe(true);
   });
 
-  test("covers the page with a dimmed backdrop", async ({ app }) => {
+  test("covers the page with a dim", async ({ app }) => {
     await app.openNewExpense();
 
-    await expect(app.modal).toHaveCSS("display", "block");
-    await expect(app.modal).toHaveCSS(
-      "background-color",
-      "rgba(0, 0, 0, 0.5)",
-    );
+    await expect(app.scrim).toBeVisible();
+    await expect(app.scrim).toHaveCSS("background-color", "rgba(47, 42, 42, 0.42)");
   });
 
-  test("keeps the list out of reach behind the backdrop", async ({
+  test("closes when the dim is tapped, without opening anything else", async ({
     app,
-    page,
   }) => {
     await app.openNewExpense();
 
-    // Where the expense row sits, but the dialog is in front of it.
-    await page.mouse.click(200, 400);
+    await app.dismissDialog();
 
-    await expect(app.modal).toBeVisible();
-    await expect(app.modalTitle).toHaveText("New Expense");
+    await expect(app.sheet).toHaveCount(0);
+    await expect(app.scrim).toHaveCount(0);
   });
 
-  test("stays open until Cancel, the close button or a save", async ({
+  test("ignores Escape, which a phone does not send", async ({
     app,
     page,
   }) => {
     await app.openNewExpense();
 
     await page.keyboard.press("Escape");
-    await expect(app.modal).toBeVisible();
 
-    await app.cancelButton.click();
-    await expect(app.modal).toHaveCount(0);
+    await expect(app.sheet).toBeVisible();
   });
 
-  test("opens one dialog at a time", async ({ app, page }) => {
+  test("opens one sheet at a time", async ({ app }) => {
     await app.openExpense("Groceries");
 
-    await expect(page.locator(".modal")).toHaveCount(1);
-    await expect(app.modalTitle).toHaveText("Edit Expense");
+    await expect(app.sheet).toHaveCount(1);
+    await expect(app.sheetTitle).toHaveText("Edit expense");
+  });
+
+  test("offers deletion only when editing", async ({ app }) => {
+    await app.openNewExpense();
+    await expect(app.deleteButton).toHaveCount(0);
+
+    await app.dismissDialog();
+    await app.openExpense("Groceries");
+
+    await expect(app.deleteButton).toHaveText("Delete");
   });
 
   test("fits a narrow phone screen", async ({ app, page }) => {
     await page.setViewportSize({ width: 320, height: 640 });
     await app.openNewExpense();
 
-    for (const input of [
-      app.amountInput,
-      app.descriptionInput,
-      app.dateInput,
-      app.categoriesInput,
-    ])
+    for (const input of [app.amountInput, app.descriptionInput, app.dateInput])
       await expect(input).toBeInViewport();
     await expect(app.submitButton).toBeInViewport();
     expect(

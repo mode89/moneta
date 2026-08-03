@@ -1,4 +1,4 @@
-// The dialog rejects an expense with an `alert` and stays open. The same
+// The sheet rejects an expense with an `alert` and stays open. The same
 // `expenseError` check guards the import path, so the wording is shared.
 import { test, expect } from "./fixtures.js";
 
@@ -15,8 +15,8 @@ test.describe("rejecting an invalid expense", () => {
       await app.submit();
 
       await dialogs.expectMessage(message);
-      await expect(app.modal).toBeVisible();
-      await expect(app.expenseItems).toHaveCount(0);
+      await expect(app.sheet).toBeVisible();
+      await expect(app.rows).toHaveCount(0);
       expect(await app.stored()).toBe(null);
     });
 
@@ -62,7 +62,7 @@ test.describe("rejecting an invalid expense", () => {
     await app.submit();
 
     await dialogs.expectMessage("Date cannot be in the future.");
-    await expect(app.modal).toBeVisible();
+    await expect(app.sheet).toBeVisible();
     expect(await app.stored()).toBe(null);
   });
 
@@ -75,7 +75,7 @@ test.describe("rejecting an invalid expense", () => {
 
     await app.submit();
 
-    await expect(app.modal).toHaveCount(0);
+    await expect(app.sheet).toHaveCount(0);
     await expect(app.expenseItem("Groceries")).toBeVisible();
     expect(dialogs.messages).toEqual([]);
   });
@@ -107,8 +107,8 @@ test.describe("rejecting an invalid expense", () => {
     await app.amountInput.fill("12.50");
     await app.submit();
 
-    await expect(app.modal).toHaveCount(0);
-    await expect(app.amountOf("Groceries")).toHaveText("-$12.50");
+    await expect(app.sheet).toHaveCount(0);
+    await expect(app.amountOf("Groceries")).toHaveText("12.50");
     await expect(app.categoriesOf("Groceries")).toHaveText("food");
   });
 });
@@ -123,15 +123,15 @@ test.describe("rejecting an invalid edit", () => {
   };
 
   test("leaves the stored expense alone", async ({ app, dialogs }) => {
-    await app.open({ expenses: [groceries] });
+    await app.open({ now: "2026-02-12T12:00:00Z", expenses: [groceries] });
     await app.openExpense("Groceries");
 
     await app.fillForm({ amount: "" });
     await app.submit();
 
     await dialogs.expectMessage("Invalid amount.");
-    await expect(app.modal).toBeVisible();
-    await expect(app.amountOf("Groceries")).toHaveText("-$12.50");
+    await expect(app.sheet).toBeVisible();
+    await expect(app.amountOf("Groceries")).toHaveText("12.50");
     // Nothing was saved, so storage still holds what was seeded.
     expect(await app.stored()).toEqual([groceries]);
   });

@@ -1,5 +1,4 @@
 import { test, expect } from "./fixtures.js";
-import { VERSION } from "./server.js";
 
 test.describe("the empty app", () => {
   test.beforeEach(async ({ app }) => {
@@ -8,32 +7,41 @@ test.describe("the empty app", () => {
 
   test("shows the current month and nothing spent", async ({ app }) => {
     await expect(app.monthTitle).toHaveText(await app.monthName());
-    await expect(app.totalSpentRow).toContainText("Total Spent:");
     await expect(app.totalSpent).toHaveText("$0.00");
+    await expect(app.expenseCount).toHaveText("0 expenses");
   });
 
-  test("says there are no expenses yet", async ({ app }) => {
-    await expect(app.emptyMessage).toHaveText("No expenses yet");
-    await expect(app.expenseItems).toHaveCount(0);
-    await expect(app.dayGroups).toHaveCount(0);
+  test("leaves out the average until something is recorded", async ({
+    app,
+  }) => {
+    await expect(app.meta).toHaveCount(1);
   });
 
-  test("offers import, export and a new expense button", async ({ app }) => {
-    await expect(app.expenseCard.getByRole("heading")).toHaveText("Expenses");
-    await expect(app.importButton).toBeVisible();
-    await expect(app.exportButton).toBeVisible();
+  test("invites a first expense or an import", async ({ app }) => {
+    await expect(app.emptyMessage).toContainText("Nothing recorded yet.");
+    await expect(app.emptyMessage).toContainText(
+      "Tap + to add your first expense — or open settings to import a file you exported before.",
+    );
+    await expect(app.rows).toHaveCount(0);
+    await expect(app.dayHeadings).toHaveCount(0);
+  });
+
+  test("shows no category chips", async ({ app }) => {
+    await expect(app.legendChips).toHaveCount(0);
+  });
+
+  test("offers settings and a new expense button", async ({ app }) => {
+    await expect(app.settingsButton).toBeVisible();
     await expect(app.newExpenseButton).toBeVisible();
     await expect(app.newExpenseButton).toHaveText("+");
-  });
-
-  test("shows the build version", async ({ app }) => {
-    await expect(app.version).toHaveText("Version: " + VERSION);
+    await expect(app.settings).toHaveCount(0);
   });
 
   test("opens no dialog and writes nothing until something happens", async ({
     app,
   }) => {
-    await expect(app.modal).toHaveCount(0);
+    await expect(app.sheet).toHaveCount(0);
+    await expect(app.card).toHaveCount(0);
     await expect(app.saveNotice).toHaveCount(0);
     expect(await app.stored()).toBe(null);
   });
@@ -42,19 +50,20 @@ test.describe("the empty app", () => {
     app,
     page,
   }) => {
-    await page.evaluate(() => {
+    const today = await app.todayIso();
+    await page.evaluate((today) => {
       const expenses = Array.from({ length: 40 }, (_, index) => ({
         id: index + 1,
         amount: 1,
         description: "Item " + index,
-        date: "2026-02-12",
+        date: today,
         categories: [],
       }));
       window.localStorage.setItem("expenses", JSON.stringify(expenses));
-    });
+    }, today);
     await page.reload();
-    await expect(app.expenseItems).toHaveCount(40);
-    await page.mouse.wheel(0, 4000);
+    await expect(app.rows).toHaveCount(40);
+    await app.list.evaluate((list) => (list.scrollTop = list.scrollHeight));
     await expect(app.newExpenseButton).toBeInViewport();
   });
 
@@ -87,7 +96,8 @@ test.describe("the empty app", () => {
     });
     await app.open();
     await app.openNewExpense();
-    await app.cancelButton.click();
+    await app.dismissDialog();
+    await expect(app.sheet).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 });

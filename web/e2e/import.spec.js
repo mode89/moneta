@@ -1,6 +1,8 @@
-// Importing discards whatever is on the device, so every failure path has to
-// leave the existing expenses alone.
-import { test, expect, importFile } from "./fixtures.js";
+// Importing discards whatever is on the device, so it asks first and every
+// failure path leaves the existing expenses alone.
+import { test, expect, importFile, chooseFileToImport } from "./fixtures.js";
+
+const FEBRUARY = "2026-02-12T12:00:00Z";
 
 const existing = [
   {
@@ -33,26 +35,70 @@ const json = (value) => JSON.stringify(value, null, 2);
 
 test.describe("importing expenses", () => {
   test.beforeEach(async ({ app }) => {
-    await app.open({ now: "2026-02-12T12:00:00Z", expenses: existing });
+    await app.open({ now: FEBRUARY, expenses: existing });
   });
 
-  test("replaces the expenses on the device", async ({ app, dialogs }) => {
+  test("asks before replacing anything, naming the file", async ({ app }) => {
+    await chooseFileToImport(app, {
+      name: "moneta-2026-02-12.json",
+      content: json(imported),
+    });
+
+    await expect(app.cardTitle).toHaveText("Import this file?");
+    await expect(app.cardBody).toHaveText(
+      "moneta-2026-02-12.json holds 2 expenses. Importing removes the 1 expense on this device and cannot be undone.",
+    );
+    await expect(app.cancelButton).toHaveText("Keep mine");
+    await expect(app.confirmButton).toHaveText("Import");
+    expect(await app.stored()).toEqual(existing);
+  });
+
+  test("keeps what is on the device when the question is refused", async ({
+    app,
+  }) => {
+    await chooseFileToImport(app, { content: json(imported) });
+
+    await app.cancelButton.click();
+    await app.closeSettings();
+
+    await expect(app.expenseItem("Groceries")).toBeVisible();
+    await expect(app.expenseItem("Bus")).toHaveCount(0);
+    expect(await app.stored()).toEqual(existing);
+  });
+
+  test("keeps what is on the device when the dim is tapped", async ({
+    app,
+  }) => {
+    await chooseFileToImport(app, { content: json(imported) });
+
+    await app.dismissDialog();
+
+    await expect(app.card).toHaveCount(0);
+    await expect(app.settings).toBeVisible();
+    expect(await app.stored()).toEqual(existing);
+  });
+
+  test("replaces the expenses on the device once accepted", async ({
+    app,
+    dialogs,
+  }) => {
     await importFile(app, { content: json(imported) });
 
-    await expect(app.expenseItems).toHaveCount(2);
+    await expect(app.rows).toHaveCount(2);
     await expect(app.expenseItem("Groceries")).toHaveCount(0);
     await expect(app.expenseItem("Bus")).toBeVisible();
-    await expect(app.amountOf("Lunch")).toHaveText("-$7.50");
+    await expect(app.amountOf("Lunch")).toHaveText("7.50");
     await expect(app.categoriesOf("Bus")).toHaveText("travel");
     expect(dialogs.messages).toEqual([]);
   });
 
-  test("groups and totals what it imported", async ({ app }) => {
+  test("returns to the list, grouped and totalled", async ({ app }) => {
     await importFile(app, { content: json(imported) });
 
-    await expect(app.listedDays).toHaveText(["2026-02-12", "2026-02-11"]);
-    await expect(app.dayTotal("2026-02-12")).toHaveText("$7.50");
-    await expect(app.dayTotal("2026-02-11")).toHaveText("$5.00");
+    await expect(app.settings).toHaveCount(0);
+    await expect(app.listedDays).toHaveText(["Today", "Yesterday"]);
+    await expect(app.dayTotal("Today")).toHaveText("$7.50");
+    await expect(app.dayTotal("Yesterday")).toHaveText("$5.00");
     await expect(app.totalSpent).toHaveText("$12.50");
   });
 
@@ -65,11 +111,11 @@ test.describe("importing expenses", () => {
 
   test("survives a reload", async ({ app, page }) => {
     await importFile(app, { content: json(imported) });
-    await expect(app.expenseItems).toHaveCount(2);
+    await expect(app.rows).toHaveCount(2);
 
     await page.reload();
 
-    await expect(app.expenseItems).toHaveCount(2);
+    await expect(app.rows).toHaveCount(2);
     await expect(app.expenseItem("Bus")).toBeVisible();
   });
 
@@ -80,7 +126,7 @@ test.describe("importing expenses", () => {
       ]),
     });
 
-    await expect(app.categoriesOf("Bus")).toHaveText("bus, commute, travel");
+    await expect(app.categoriesOf("Bus")).toHaveText("bus · commute · travel");
     expect(await app.stored()).toEqual([
       expect.objectContaining({ categories: ["bus", "commute", "travel"] }),
     ]);
@@ -88,7 +134,9 @@ test.describe("importing expenses", () => {
 
   test("accepts an expense stored without categories", async ({ app }) => {
     await importFile(app, {
-      content: json([{ id: 10, amount: 5, description: "Bus", date: "2026-02-11" }]),
+      content: json([
+        { id: 10, amount: 5, description: "Bus", date: "2026-02-11" },
+      ]),
     });
 
     await expect(app.expenseItem("Bus")).toBeVisible();
@@ -96,89 +144,100 @@ test.describe("importing expenses", () => {
   });
 
   test("an empty file clears the list", async ({ app }) => {
-    await importFile(app, { content: "[]" });
+    await chooseFileToImport(app, { content: "[]" });
+
+    await expect(app.cardBody).toContainText("moneta.json holds 0 expenses.");
+    await app.confirmButton.click();
 
     await expect(app.emptyMessage).toBeVisible();
     await expect(app.totalSpent).toHaveText("$0.00");
     expect(await app.stored()).toEqual([]);
   });
 
+  test("says what an import into an empty device replaces", async ({ app }) => {
+    await importFile(app, { content: "[]" });
+
+    await chooseFileToImport(app, { content: json(imported) });
+
+    await expect(app.cardBody).toHaveText(
+      "moneta.json holds 2 expenses. Importing replaces everything on this device and cannot be undone.",
+    );
+  });
+
   test("backing out of the file picker changes nothing", async ({
     app,
     dialogs,
   }) => {
-    await importFile(app, { content: null });
+    await chooseFileToImport(app, { content: null });
 
-    await expect(app.expenseItem("Groceries")).toBeVisible();
+    await expect(app.card).toHaveCount(0);
     expect(dialogs.messages).toEqual([]);
     expect(await app.stored()).toEqual(existing);
   });
 
   test.describe("a file it cannot use", () => {
-    const rejects = (name, content, message) =>
+    const rejectsOnSight = (name, content, message) =>
       test(name, async ({ app, dialogs }) => {
-        await importFile(app, { content });
+        await chooseFileToImport(app, { content });
 
         await dialogs.expectMessage(message);
-        await expect(app.expenseItems).toHaveCount(1);
-        await expect(app.expenseItem("Groceries")).toBeVisible();
+        await expect(app.card).toHaveCount(0);
         expect(await app.stored()).toEqual(existing);
       });
 
-    rejects(
+    rejectsOnSight(
       "is not JSON at all",
       "this is not json",
       "Failed to import expenses: Unexpected token 'h', \"this is not json\" is not valid JSON",
     );
 
-    rejects(
+    rejectsOnSight(
       "is JSON but not a list",
       json({ id: 1 }),
       "Failed to import expenses: JSON.parse(...).map is not a function",
     );
 
-    rejects(
-      "holds an expense with no id",
-      json([{ amount: 5, description: "Bus", date: "2026-02-11" }]),
-      "File contains errors.",
-    );
+    const rejectsOnImport = (name, content) =>
+      test(name, async ({ app, dialogs }) => {
+        await chooseFileToImport(app, { content });
+        await expect(app.card).toBeVisible();
 
-    rejects(
-      "holds an expense with no amount",
-      json([{ id: 10, description: "Bus", date: "2026-02-11" }]),
-      "File contains errors.",
-    );
+        await app.confirmButton.click();
 
-    rejects(
-      "holds an expense with a blank description",
-      json([{ id: 10, amount: 5, description: "  ", date: "2026-02-11" }]),
-      "File contains errors.",
-    );
-
-    rejects(
-      "holds an expense with an unreadable date",
-      json([{ id: 10, amount: 5, description: "Bus", date: "not a date" }]),
-      "File contains errors.",
-    );
-
-    rejects(
-      "holds an expense dated in the future",
-      json([{ id: 10, amount: 5, description: "Bus", date: "2026-02-13" }]),
-      "File contains errors.",
-    );
-
-    test("rejects the whole file for one bad expense", async ({
-      app,
-      dialogs,
-    }) => {
-      await importFile(app, {
-        content: json([imported[0], { ...imported[1], amount: -1 }]),
+        await dialogs.expectMessage("File contains errors.");
+        await expect(app.expenseItem("Groceries")).toBeVisible();
+        expect(await app.stored()).toEqual(existing);
       });
 
-      await dialogs.expectMessage("File contains errors.");
-      await expect(app.expenseItem("Bus")).toHaveCount(0);
-      await expect(app.expenseItem("Groceries")).toBeVisible();
-    });
+    rejectsOnImport(
+      "holds an expense with no id",
+      json([{ amount: 5, description: "Bus", date: "2026-02-11" }]),
+    );
+
+    rejectsOnImport(
+      "holds an expense with no amount",
+      json([{ id: 10, description: "Bus", date: "2026-02-11" }]),
+    );
+
+    rejectsOnImport(
+      "holds an expense with a blank description",
+      json([{ id: 10, amount: 5, description: "  ", date: "2026-02-11" }]),
+    );
+
+    rejectsOnImport(
+      "holds an expense with an unreadable date",
+      json([{ id: 10, amount: 5, description: "Bus", date: "not a date" }]),
+    );
+
+    rejectsOnImport(
+      "holds an expense dated in the future",
+      json([{ id: 10, amount: 5, description: "Bus", date: "2026-02-13" }]),
+    );
+
+    rejectsOnImport(
+      "holds one bad expense among good ones",
+      json([imported[0], { ...imported[1], amount: -1 }]),
+    );
 
     test("logs what was wrong with each expense", async ({ app }) => {
       const logged = [];
@@ -186,12 +245,13 @@ test.describe("importing expenses", () => {
         if (message.type() === "error") logged.push(message.text());
       });
 
-      await importFile(app, {
+      await chooseFileToImport(app, {
         content: json([
           { ...imported[0], amount: 0 },
           { ...imported[1], description: "" },
         ]),
       });
+      await app.confirmButton.click();
 
       await expect
         .poll(() => logged)

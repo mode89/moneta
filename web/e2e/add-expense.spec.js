@@ -5,33 +5,30 @@ test.describe("adding an expense", () => {
     await app.open();
   });
 
-  test("opens a blank dialog dated today", async ({ app }) => {
+  test("opens a blank sheet dated today", async ({ app }) => {
     await app.openNewExpense();
 
-    await expect(app.modalTitle).toHaveText("New Expense");
-    await expect(app.submitButton).toHaveText("Save");
+    await expect(app.sheetTitle).toHaveText("Add an expense");
+    await expect(app.submitButton).toHaveText("Save expense");
     await expect(app.amountInput).toHaveValue("");
     await expect(app.descriptionInput).toHaveValue("");
     await expect(app.dateInput).toHaveValue(await app.todayIso());
-    await expect(app.categoriesInput).toHaveValue("");
-    // Only the edit dialog offers deletion.
+    await expect(app.categoryChips.filter({ hasText: "✕" })).toHaveCount(0);
+    // Only the edit sheet offers deletion.
     await expect(app.deleteButton).toHaveCount(0);
   });
 
-  test("labels every field", async ({ app, page }) => {
+  test("labels its fields", async ({ app, page }) => {
     await app.openNewExpense();
 
     await expect(page.getByLabel("Amount")).toHaveAttribute("type", "number");
     await expect(page.getByLabel("Description")).toHaveAttribute("type", "text");
     await expect(page.getByLabel("Date")).toHaveAttribute("type", "date");
-    await expect(page.getByLabel("Categories")).toHaveAttribute("type", "text");
     await expect(app.amountInput).toHaveAttribute("placeholder", "0.00");
     await expect(app.amountInput).toHaveAttribute("step", "0.01");
   });
 
   test("lists the saved expense under today", async ({ app }) => {
-    const today = await app.todayIso();
-
     await app.addExpense({
       amount: "12.50",
       description: "Groceries",
@@ -39,20 +36,19 @@ test.describe("adding an expense", () => {
     });
 
     await expect(app.emptyMessage).toHaveCount(0);
-    await expect(app.expenseItems).toHaveCount(1);
-    await expect(app.dayGroup(today)).toBeVisible();
+    await expect(app.rows).toHaveCount(1);
+    await expect(app.dayHeading("Today")).toBeVisible();
     await expect(app.expenseItem("Groceries")).toBeVisible();
-    await expect(app.amountOf("Groceries")).toHaveText("-$12.50");
+    await expect(app.amountOf("Groceries")).toHaveText("12.50");
     await expect(app.categoriesOf("Groceries")).toHaveText("food");
   });
 
   test("adds the amount to the day and month totals", async ({ app }) => {
-    const today = await app.todayIso();
-
     await app.addExpense({ amount: "12.50", description: "Groceries" });
 
-    await expect(app.dayTotal(today)).toHaveText("$12.50");
+    await expect(app.dayTotal("Today")).toHaveText("$12.50");
     await expect(app.totalSpent).toHaveText("$12.50");
+    await expect(app.expenseCount).toHaveText("1 expense");
   });
 
   test("stores the expense in the JSON shape the device holds", async ({
@@ -79,30 +75,22 @@ test.describe("adding an expense", () => {
     expect(await app.storedJson()).toContain('\n  {\n    "id"');
   });
 
-  test("shows the Saved bubble", async ({ app }) => {
+  test("shows the Saved notice", async ({ app }) => {
     await app.addExpense({ amount: "1", description: "Coffee" });
 
     await expect(app.saveNotice).toHaveText("Saved");
   });
 
-  test("trims the description and normalises categories", async ({ app }) => {
-    await app.addExpense({
-      amount: "3",
-      description: "   Coffee   ",
-      categories: "  Shopping   FOOD  ",
-    });
+  test("trims the description", async ({ app }) => {
+    await app.addExpense({ amount: "3", description: "   Coffee   " });
 
     await expect(app.expenseItem("Coffee")).toBeVisible();
-    await expect(app.categoriesOf("Coffee")).toHaveText("food, shopping");
     expect(await app.stored()).toEqual([
-      expect.objectContaining({
-        description: "Coffee",
-        categories: ["food", "shopping"],
-      }),
+      expect.objectContaining({ description: "Coffee" }),
     ]);
   });
 
-  test("shows no category line when none were given", async ({ app }) => {
+  test("shows no category line when none were chosen", async ({ app }) => {
     await app.addExpense({ amount: "3", description: "Coffee" });
 
     await expect(app.categoriesOf("Coffee")).toHaveCount(0);
@@ -122,7 +110,7 @@ test.describe("adding an expense", () => {
       date: yesterday,
     });
 
-    await expect(app.dayGroup(yesterday)).toBeVisible();
+    await expect(app.dayHeading("Yesterday")).toBeVisible();
     expect(await app.stored()).toEqual([
       expect.objectContaining({ date: yesterday }),
     ]);
@@ -131,7 +119,7 @@ test.describe("adding an expense", () => {
   test("keeps fractional amounts to the cent", async ({ app }) => {
     await app.addExpense({ amount: "0.05", description: "Sweet" });
 
-    await expect(app.amountOf("Sweet")).toHaveText("-$0.05");
+    await expect(app.amountOf("Sweet")).toHaveText("0.05");
     await expect(app.totalSpent).toHaveText("$0.05");
   });
 
@@ -146,41 +134,28 @@ test.describe("adding an expense", () => {
 
     await expect(app.amountInput).toHaveValue("");
     await expect(app.descriptionInput).toHaveValue("");
-    await expect(app.categoriesInput).toHaveValue("");
+    await expect(app.categoryChips.filter({ hasText: "✕" })).toHaveCount(0);
     await expect(app.dateInput).toHaveValue(await app.todayIso());
   });
 
-  test("Cancel discards the expense", async ({ app }) => {
+  test("tapping the dim discards the expense", async ({ app }) => {
     await app.openNewExpense();
     await app.fillForm({ amount: "12.50", description: "Groceries" });
 
-    await app.cancelButton.click();
+    await app.dismissDialog();
 
-    await expect(app.modal).toHaveCount(0);
+    await expect(app.sheet).toHaveCount(0);
     await expect(app.emptyMessage).toBeVisible();
     expect(await app.stored()).toBe(null);
   });
 
-  test("the close button discards the expense", async ({ app }) => {
-    await app.openNewExpense();
-    await app.fillForm({ amount: "12.50", description: "Groceries" });
-
-    await app.closeButton.click();
-
-    await expect(app.modal).toHaveCount(0);
-    await expect(app.expenseItems).toHaveCount(0);
-    expect(await app.stored()).toBe(null);
-  });
-
   test("adds a second expense to the same day", async ({ app }) => {
-    const today = await app.todayIso();
-
     await app.addExpense({ amount: "10", description: "Lunch" });
     await app.addExpense({ amount: "2.25", description: "Coffee" });
 
-    await expect(app.dayGroups).toHaveCount(1);
-    await expect(app.expensesOf(today)).toHaveCount(2);
-    await expect(app.dayTotal(today)).toHaveText("$12.25");
+    await expect(app.dayHeadings).toHaveCount(1);
+    await expect(app.rows).toHaveCount(2);
+    await expect(app.dayTotal("Today")).toHaveText("$12.25");
     await expect(app.totalSpent).toHaveText("$12.25");
     // Ids are creation timestamps and a day lists the newest first.
     await expect(app.listedDescriptions).toHaveText(["Coffee", "Lunch"]);

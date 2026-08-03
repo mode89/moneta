@@ -1,11 +1,11 @@
 // Shared test fixtures: a page object over the app's markup, a dialog recorder
-// (the app talks to the user through `alert` and `confirm`), and helpers for
-// seeding `localStorage` and for the Android bridge.
+// (the app still talks to the user through `alert` when a file or a form is
+// wrong), and helpers for seeding `localStorage` and for the Android bridge.
 //
 // The app carries no test hooks, so locators are built from the roles, labels
-// and Bootstrap classes `main.js` actually renders. Anything that needs to be
-// in place before the module runs — stored expenses, a fixed clock, the
-// `Android` object — is installed by `app.open()` before it navigates.
+// and class names `main.js` actually renders. Anything that needs to be in
+// place before the module runs — stored expenses, a fixed clock, the `Android`
+// object — is installed by `app.open()` before it navigates.
 import { test as base, expect } from "@playwright/test";
 
 export { expect };
@@ -13,8 +13,8 @@ export { expect };
 export const STORAGE_KEY = "expenses";
 
 // Records every `alert`/`confirm` the page raises. Playwright dismisses
-// dialogs itself when nothing is listening, and a dismissed `confirm` is a
-// "no", so a test that means to confirm has to say so with `acceptAll()`.
+// dialogs itself when nothing is listening, so a test that means to accept one
+// has to say so with `acceptAll()`.
 export class Dialogs {
   constructor(page) {
     this.messages = [];
@@ -49,38 +49,107 @@ export class Dialogs {
   }
 }
 
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+// The heading the app writes over a day: Today and Yesterday only for those
+// two days of the current month, and `12 February` everywhere else.
+export function dayLabel(isoDate, todayIso = null) {
+  if (isoDate === todayIso) return "Today";
+  if (todayIso && isoDate === shiftIsoDate(todayIso, -1)) return "Yesterday";
+  const [, month, day] = isoDate.split("-").map(Number);
+  return day + " " + MONTHS[month - 1];
+}
+
+export function monthLabel(isoDate) {
+  const [year, month] = isoDate.split("-").map(Number);
+  return MONTHS[month - 1] + " " + year;
+}
+
+export function shiftIsoDate(isoDate, days) {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const date = new Date(year, month - 1, day + days);
+  return (
+    date.getFullYear() +
+    "-" +
+    String(date.getMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(date.getDate()).padStart(2, "0")
+  );
+}
+
 export class MonetaApp {
   constructor(page) {
     this.page = page;
+    this.app = page.locator(".app");
 
-    this.summaryCard = page.locator(".card.mb-4");
-    this.monthTitle = this.summaryCard.locator(".card-title");
-    this.totalSpentRow = this.summaryCard.locator(".card-text");
-    // `Amount` renders the blurrable span, one level inside the coloured one.
-    this.totalSpent = this.totalSpentRow.locator("span > span");
+    // header
+    this.header = page.locator(".head");
+    this.monthTitle = this.header.locator(".month");
+    this.totalSpentRow = this.header.locator(".total");
+    this.totalSpent = this.totalSpentRow.locator("span");
+    this.meta = this.header.locator(".meta > span");
+    this.expenseCount = this.meta.first();
+    this.averagePerDay = this.meta.nth(1).locator("b > span");
+    this.settingsButton = page.getByLabel("Settings");
 
-    this.expenseCard = page.locator(".card.mt-4");
-    this.emptyMessage = this.expenseCard.locator("li.text-muted");
-    this.importButton = page.getByTitle("Import Expenses");
-    this.exportButton = page.getByTitle("Export Expenses");
-    this.dayGroups = this.expenseCard.locator("li.bg-light.p-0");
-    this.dayHeadings = this.expenseCard.locator("li.bg-light > strong");
-    this.expenseItems = this.expenseCard.locator("li.list-group-item.d-flex");
-    this.newExpenseButton = page.locator("button.fixed-bottom-right");
+    // the category chips under the header
+    this.legendChips = page.locator(".legend .chip");
 
-    this.modal = page.locator(".modal");
-    this.modalTitle = this.modal.locator(".modal-title");
+    // the list: day headings, rows, and one fold line per earlier month
+    this.list = page.locator(".app > .scroll");
+    this.emptyMessage = this.list.locator(".empty");
+    this.dayHeadings = this.list.locator(".day");
+    this.listedDays = this.dayHeadings.locator("> span:first-child");
+    this.rows = this.list.locator(".row");
+    this.listedDescriptions = this.rows.locator(".desc");
+    this.foldLines = this.list.locator(".fold");
+    this.newExpenseButton = page.getByLabel("Add an expense");
+
+    // the add/edit sheet
+    this.scrim = page.locator(".scrim");
+    this.sheet = page.locator(".sheet");
+    this.sheetTitle = this.sheet.locator("h3");
     this.amountInput = page.locator("#expense-amount");
     this.descriptionInput = page.locator("#expense-description");
     this.dateInput = page.locator("#expense-date");
-    this.categoriesInput = page.locator("#expense-categories");
-    this.closeButton = this.modal.locator(".btn-close");
-    this.cancelButton = this.modal.getByRole("button", { name: "Cancel" });
-    this.deleteButton = this.modal.getByRole("button", { name: "Delete" });
-    this.submitButton = this.modal.locator("button.btn-primary");
+    this.categoryChips = this.sheet.locator(".chiprow .chip");
+    this.newCategoryChip = this.categoryChips.filter({ hasText: "+ new" });
+    this.chipField = this.sheet.locator(".chip-field");
+    this.submitButton = this.sheet.locator(".save");
+    this.deleteButton = this.sheet.locator(".ghost");
 
-    this.saveNotice = page.locator(".bubble");
-    this.version = page.locator(".version");
+    // the delete and import confirmations
+    this.card = page.locator(".card");
+    this.cardTitle = this.card.locator("h3");
+    this.cardBody = this.card.locator("p");
+    this.confirmButton = this.card.locator(".save");
+    this.cancelButton = this.card.locator(".ghost");
+
+    // settings
+    this.settings = page.locator(".cover");
+    this.closeSettingsButton = page.getByLabel("Close settings");
+    this.exportRow = this.settings.locator(".set-row").filter({
+      hasText: "Export expenses",
+    });
+    this.importRow = this.settings.locator(".set-row").filter({
+      hasText: "Import expenses",
+    });
+    this.version = this.settings.locator(".version");
+
+    this.saveNotice = page.locator(".notice");
   }
 
   // `expenses` are seeded in stored form (`date` as YYYY-MM-DD); `now` fixes
@@ -102,54 +171,74 @@ export class MonetaApp {
       );
     if (android) await installAndroidBridge(this.page);
     await this.page.goto("/");
-    await expect(this.expenseCard).toBeVisible();
+    await expect(this.header).toBeVisible();
   }
 
   // --- reading the page -----------------------------------------------
 
-  dayGroup(isoDate) {
-    return this.dayGroups.filter({ hasText: isoDate });
+  dayHeading(label) {
+    return this.dayHeadings.filter({ hasText: label });
   }
 
-  dayTotal(isoDate) {
-    return this.dayGroup(isoDate).locator("strong > span > span");
+  dayTotal(label) {
+    return this.dayHeading(label).locator(".sum span");
   }
 
-  expensesOf(isoDate) {
-    return this.dayGroup(isoDate).locator("li.list-group-item.d-flex");
-  }
-
+  // A row is found by its description, not by anything else it carries.
   expenseItem(description) {
-    return this.expenseItems.filter({ hasText: description });
+    return this.rows.filter({
+      has: this.page.locator(".desc", { hasText: description }),
+    });
   }
 
   amountOf(description) {
-    return this.expenseItem(description).locator("span.text-danger > span");
+    return this.expenseItem(description).locator(".amt span");
   }
 
   categoriesOf(description) {
-    return this.expenseItem(description).locator(".text-info");
+    return this.expenseItem(description).locator(".cats");
   }
 
-  // The descriptions in the order they are rendered, days and all.
-  get listedDescriptions() {
-    return this.expenseItems.locator("div > span");
+  dotOf(description) {
+    return this.expenseItem(description).locator("i.dot");
   }
 
-  get listedDays() {
-    return this.expenseCard.locator("li.bg-light > strong > span:first-child");
+  legendChip(name) {
+    return this.legendChips.filter({ hasText: name });
+  }
+
+  categoryChip(name) {
+    return this.categoryChips.filter({ hasText: name });
+  }
+
+  foldLine(month) {
+    return this.foldLines.filter({ hasText: month });
+  }
+
+  foldTotal(month) {
+    return this.foldLine(month).locator(".sum span");
+  }
+
+  foldHelp(month) {
+    return this.foldLine(month).locator(".help");
   }
 
   // --- driving the page -----------------------------------------------
 
   async openNewExpense() {
     await this.newExpenseButton.click();
-    await expect(this.modal).toBeVisible();
+    await expect(this.sheet).toBeVisible();
   }
 
   async openExpense(description) {
-    await this.expenseItem(description).locator("div").first().click();
-    await expect(this.modal).toBeVisible();
+    await this.expenseItem(description).locator(".desc").click();
+    await expect(this.sheet).toBeVisible();
+  }
+
+  // The dim is the only way to close the sheet. Its centre is behind the sheet
+  // itself, so the click lands near the top-left corner.
+  async dismissDialog() {
+    await this.scrim.click({ position: { x: 40, y: 40 } });
   }
 
   async fillForm({ amount, description, date, categories }) {
@@ -157,19 +246,61 @@ export class MonetaApp {
     if (description !== undefined)
       await this.descriptionInput.fill(description);
     if (date !== undefined) await this.dateInput.fill(date);
-    if (categories !== undefined) await this.categoriesInput.fill(categories);
+    if (categories !== undefined) await this.setCategories(categories);
+  }
+
+  // Leaves exactly the named categories selected, naming any the user has
+  // never used before through the `+ new` chip.
+  async setCategories(text) {
+    const wanted = text.trim() === "" ? [] : text.trim().toLowerCase().split(/\s+/);
+    const selected = this.categoryChips.filter({ hasText: "✕" });
+    for (let count = await selected.count(); count > 0; count -= 1)
+      await selected.first().click();
+    for (const name of wanted) {
+      const chip = this.categoryChip(name);
+      if ((await chip.count()) > 0) await chip.click();
+      else await this.nameCategory(name);
+    }
+  }
+
+  // Types a category into the field the `+ new` chip turns into; a space
+  // commits it.
+  async nameCategory(name) {
+    await this.newCategoryChip.click();
+    await this.chipField.pressSequentially(name);
+    await this.chipField.press(" ");
+    await expect(this.chipField).toHaveCount(0);
   }
 
   async submit() {
     await this.submitButton.click();
   }
 
-  // Fills the new-expense dialog and saves it, leaving the dialog closed.
+  // Fills the new-expense sheet and saves it, leaving the sheet closed.
   async addExpense(fields) {
     await this.openNewExpense();
     await this.fillForm(fields);
     await this.submit();
-    await expect(this.modal).toBeHidden();
+    await expect(this.sheet).toHaveCount(0);
+  }
+
+  // Opens an expense, asks to delete it and confirms.
+  async deleteExpense(description) {
+    await this.openExpense(description);
+    await this.deleteButton.click();
+    await expect(this.card).toBeVisible();
+    await this.confirmButton.click();
+    await expect(this.card).toHaveCount(0);
+  }
+
+  async openSettings() {
+    await this.settingsButton.click();
+    await expect(this.settings).toBeVisible();
+  }
+
+  async closeSettings() {
+    await this.closeSettingsButton.click();
+    await expect(this.settings).toHaveCount(0);
   }
 
   // --- storage ---------------------------------------------------------
@@ -219,8 +350,11 @@ export class MonetaApp {
   }
 
   async monthName() {
-    return this.page.evaluate(() =>
-      new Date().toLocaleString("default", { month: "long" }),
+    return this.page.evaluate(
+      () =>
+        new Date().toLocaleString("default", { month: "long" }) +
+        " " +
+        new Date().getFullYear(),
     );
   }
 }
@@ -251,11 +385,16 @@ export async function respondToPickFile(page, json) {
   await page.evaluate((json) => window.__androidPickFileCallback(json), json);
 }
 
-// Hands a file to the import flow. The `<input type=file>` is created and
-// clicked from script, so Playwright's file chooser has nothing to attach to;
-// the file is planted on the input and the change event dispatched instead.
-// A `content` of null plays the user backing out of the file picker.
-export async function importFile(app, { name = "moneta.json", content } = {}) {
+// Hands a file to the import flow and stops at the confirmation card, which
+// the caller accepts or refuses. The `<input type=file>` is created and clicked
+// from script, so Playwright's file chooser has nothing to attach to; the file
+// is planted on the input and the change event dispatched instead. A `content`
+// of null plays the user backing out of the file picker.
+export async function chooseFileToImport(
+  app,
+  { name = "moneta.json", content } = {},
+) {
+  await app.openSettings();
   await app.page.evaluate(
     ([name, content]) => {
       const nativeClick = HTMLInputElement.prototype.click;
@@ -274,7 +413,23 @@ export async function importFile(app, { name = "moneta.json", content } = {}) {
     },
     [name, content ?? null],
   );
-  await app.importButton.click();
+  await app.importRow.click();
+}
+
+// Imports a file all the way through: choose it, then confirm the card.
+export async function importFile(app, options) {
+  await chooseFileToImport(app, options);
+  await expect(app.card).toBeVisible();
+  await app.confirmButton.click();
+  await expect(app.settings).toHaveCount(0);
+}
+
+// Exports through the settings screen, leaving settings open.
+export async function exportFile(app) {
+  await app.openSettings();
+  const download = app.page.waitForEvent("download");
+  await app.exportRow.click();
+  return download;
 }
 
 // The text of a file the page offered for download.

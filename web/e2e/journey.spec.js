@@ -1,5 +1,11 @@
 // One run through the app the way it is actually used, start to finish.
-import { test, expect, downloadedText, importFile } from "./fixtures.js";
+import {
+  test,
+  expect,
+  downloadedText,
+  exportFile,
+  importFile,
+} from "./fixtures.js";
 
 test("a week of spending, exported and imported back", async ({
   app,
@@ -32,32 +38,41 @@ test("a week of spending, exported and imported back", async ({
     categories: "fun",
   });
 
-  await expect(app.expenseItems).toHaveCount(3);
-  await expect(app.listedDays).toHaveText(["2026-02-12", "2026-02-09"]);
+  await expect(app.rows).toHaveCount(3);
+  await expect(app.listedDays).toHaveText(["Today", "9 February"]);
   await expect(app.listedDescriptions).toHaveText([
     "Cinema",
     "Coffee",
     "Weekly shop",
   ]);
-  await expect(app.dayTotal("2026-02-12")).toHaveText("$20.80");
+  await expect(app.dayTotal("Today")).toHaveText("$20.80");
   await expect(app.totalSpent).toHaveText("$62.90");
+  await expect(app.expenseCount).toHaveText("3 expenses");
+
+  // What has the food been costing? The chips answer, then let it go.
+  await app.legendChip("food").click();
+  await expect(app.listedDescriptions).toHaveText(["Weekly shop"]);
+  await expect(app.totalSpent).toHaveText("$42.10");
+  await app.legendChip("food").click();
+  await expect(app.rows).toHaveCount(3);
 
   // The cinema ticket cost more than remembered, and the popcorn counts too.
   await app.openExpense("Cinema");
   await app.fillForm({ amount: "23.50", categories: "fun snacks" });
   await app.submit();
-  await expect(app.amountOf("Cinema")).toHaveText("-$23.50");
-  await expect(app.categoriesOf("Cinema")).toHaveText("fun, snacks");
+  await expect(app.amountOf("Cinema")).toHaveText("23.50");
+  await expect(app.categoriesOf("Cinema")).toHaveText("fun · snacks");
   await expect(app.totalSpent).toHaveText("$68.40");
 
   // The coffee was someone else's round.
-  dialogs.acceptAll();
   await app.openExpense("Coffee");
   await app.deleteButton.click();
+  await expect(app.cardBody).toHaveText(
+    "Coffee, $2.80 on 12 February. This cannot be undone.",
+  );
+  await app.confirmButton.click();
   await expect(app.expenseItem("Coffee")).toHaveCount(0);
   await expect(app.totalSpent).toHaveText("$65.60");
-  expect(dialogs.messages).toEqual(["Are you sure?"]);
-  dialogs.clear();
 
   // Check the numbers, then hide them again.
   await app.totalSpentRow.click();
@@ -65,17 +80,16 @@ test("a week of spending, exported and imported back", async ({
   await app.totalSpentRow.click();
   await expect(app.totalSpent).toHaveClass("blur-text");
 
-  const download = page.waitForEvent("download");
-  await app.exportButton.click();
-  const backup = await downloadedText(await download);
+  const backup = await downloadedText(await exportFile(app));
   expect(JSON.parse(backup)).toEqual([
     expect.objectContaining({ description: "Weekly shop", amount: 42.1 }),
     expect.objectContaining({ description: "Cinema", amount: 23.5 }),
   ]);
+  await app.closeSettings();
 
   // A reload brings everything back from the device.
   await page.reload();
-  await expect(app.expenseItems).toHaveCount(2);
+  await expect(app.rows).toHaveCount(2);
   await expect(app.totalSpent).toHaveText("$65.60");
 
   // A stray import wipes it out; the backup puts it back.
@@ -83,7 +97,7 @@ test("a week of spending, exported and imported back", async ({
   await expect(app.emptyMessage).toBeVisible();
 
   await importFile(app, { content: backup });
-  await expect(app.expenseItems).toHaveCount(2);
+  await expect(app.rows).toHaveCount(2);
   await expect(app.totalSpent).toHaveText("$65.60");
   expect(await app.storedJson()).toBe(backup);
   expect(dialogs.messages).toEqual([]);
