@@ -11,28 +11,31 @@ Moneta is an Android expense tracker. The entire user interface is a web app (pl
 * `web/e2e/` — Playwright UI suite: `fixtures.js` (page object, dialog recorder, seeding), `server.js` (serves the app for the tests), and the specs. `web/playwright.config.js` configures it.
 * `android/src/main/java/net/akrain/moneta/MainActivity.java` — WebView host plus the `Android` JavaScript bridge (file save/pick).
 * `android/src/main/assets/web/` — generated; build output copied here, not in git.
-* `scripts/` — `build`, `install`, `serve`, `emulator`, `test`, `e2e`.
-* `shell.nix` — Android SDK, Gradle (JDK 17), Node.js.
+* `justfile` — every development command; `just` alone lists them.
+* `scripts/emulator` — AVD creation and emulator start, called by `just emulator`.
+* `shell.nix` — Android SDK, Gradle (JDK 17), Node.js, `just`.
 
 ## Working in the Nix shell
 
-The project pins its toolchain, so use plain `nix-shell` rather than `--packages`:
+The project pins its toolchain, so use plain `nix-shell` rather than `--packages`, and drive everything through `just` inside it:
 
 ```
-nix-shell --run "scripts/build"
+nix-shell --run "just build"
 ```
 
-`scripts/build` needs `$AAPT2`, which `shell.nix` exports; running it outside the shell will fail.
+`just build` needs `$AAPT2`, which `shell.nix` exports; running it outside the shell will fail.
 
 ## Development loop
 
-* `scripts/serve` serves `android/src/main/assets/web` on port 8080 for browser-based iteration. It serves the *built* assets, so run `scripts/build` first (or edit the copied `main.js` and re-copy). It sends no cache headers, so Chrome will happily serve a stale `main.js`; force a hard reload after editing (a query string on the page URL does not change the module's own URL, so it stays cached).
-* `scripts/build` builds the web bundle, copies it into the Android assets, then runs `gradle build`.
-* `scripts/install` installs the debug APK via `adb install -r`.
-* `scripts/emulator` creates the `moneta` AVD if missing and starts it.
+`just` with no recipe lists what follows. `just` hides `npm`, `gradle` and `adb`: no recipe needs them run by hand.
 
-* `scripts/test` runs the unit tests in `web/test/` with Node's built-in runner, under two timezones. No linter is configured.
-* `scripts/e2e` runs the Playwright UI suite in `web/e2e/`, also under two timezones (one Chromium project each for Asia/Kolkata and America/New_York). It takes Playwright's own arguments, so `scripts/e2e --project=east-of-utc add-expense --headed` works. It starts its own server on port 8099 from `web/e2e/server.js`, which serves `web/index.html`, `web/main.js` and the four Solid modules under the same names `scripts/build` gives them — so no build is needed, and the import map resolves exactly as it does on the device.
+* `just serve` refreshes the web assets, then serves `android/src/main/assets/web` on port 8080 for browser-based iteration. It sends no cache headers, so Chrome will happily serve a stale `main.js`; force a hard reload after editing (a query string on the page URL does not change the module's own URL, so it stays cached).
+* `just build` copies the web app into the Android assets (`build-web`), then packages the APK (`build-android`). Either half can be run alone.
+* `just install` checks that a device is attached, builds, then installs the debug APK. With no device it says so and stops before the build.
+* `just emulator` creates the `moneta` AVD if missing and starts it, in the foreground.
+
+* `just test` runs the unit tests in `web/test/` with Node's built-in runner, under two timezones. No linter is configured.
+* `just test-browser` runs the Playwright UI suite in `web/e2e/`, also under two timezones (one Chromium project each for Asia/Kolkata and America/New_York). It passes its arguments to Playwright, so `just test-browser --project=east-of-utc add-expense --headed` works. It starts its own server on port 8099 from `web/e2e/server.js`, which serves `web/index.html`, `web/main.js` and the four Solid modules under the same names `build-web` gives them — so no build is needed, and the import map resolves exactly as it does on the device.
 
 The unit tests cover the domain layer of `main.js` (validation, form conversion, stored JSON, store actions, import); the Playwright suite covers the Solid components and the flows through them (adding, editing, deleting, grouping and totals, blurred amounts, persistence and reload, import/export in both the browser and the Android branch). Between them a UI change should be provable without a device, but a change to the bridge itself still needs an emulator run.
 

@@ -18,23 +18,19 @@ straightforward way to manage personal finances on the go.
 
 # Development
 
-Create AVD:
+All development commands live in the `justfile` and run inside the Nix shell,
+which pins the Android SDK, Gradle, Node.js and `just`:
+
 ```
-$ avdmanager create avd \
-    --name <name>
-    --package "system-images;android-32;google_apis;x86_64"
+$ nix-shell
+$ just
 ```
 
-Enable hardware keyboard by setting `hw.keyboard` to `yes` in the AVD
-config file `~/.android/avd/<name>.avd/config.ini`.
+`just` on its own lists the recipes:
 
-Run emulator:
-```
-$ emulator -avd <name>
-```
-
-Build and install APK:
-```
-$ scripts/build
-$ scripts/install
-```
+* `just test` — unit tests, east and west of UTC.
+* `just test-browser [args]` — Playwright UI suite; arguments go to Playwright.
+* `just serve` — serve the web app on port 8080.
+* `just emulator` — create the `moneta` AVD if missing and start it.
+* `just build` — build the web assets and the APK.
+* `just install` — build and install the debug APK on the attached device.

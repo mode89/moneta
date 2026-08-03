@@ -23,6 +23,7 @@ in pkgs.mkShell {
       java = pkgs.jdk17;
     })
     nodejs
+    just
   ];
   shellHook = ''
     export ANDROID_SDK_ROOT=${androidsdk}/libexec/android-sdk

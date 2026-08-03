@@ -1,7 +1,7 @@
-// Serves the app for the end-to-end tests the way `scripts/build` lays it out:
+// Serves the app for the end-to-end tests the way `just build-web` lays it out:
 // the same URL names, so `index.html`'s import map resolves exactly as it does
-// on the device. `scripts/serve` cannot be used here because it serves the
-// *built* assets, which need a full Android build to exist.
+// on the device. `just serve` cannot be used here because it serves the
+// *built* assets, which need a build to exist.
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { dirname, extname, join, resolve } from "node:path";
@@ -11,7 +11,7 @@ const WEB_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
 const MODULES = join(WEB_DIR, "node_modules");
 const ICONS = join(MODULES, "@material-design-icons/svg/outlined");
 
-// Mirrors the copy list in `scripts/build`; keep the two in step.
+// Mirrors the copy list in the `build-web` recipe; keep the two in step.
 const FILES = {
   "/index.html": join(WEB_DIR, "index.html"),
   "/main.js": join(WEB_DIR, "main.js"),
@@ -31,7 +31,7 @@ const TYPES = {
   ".svg": "image/svg+xml",
 };
 
-// `scripts/build` substitutes the commit date and hash; the tests only need the
+// `just build-web` substitutes the commit date and hash; the tests only need the
 // placeholder gone and a value they can assert on.
 export const VERSION = "e2e-test-build";
 
