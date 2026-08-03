@@ -8,8 +8,11 @@ _Reference context — observed facts and standing conventions for this project,
 ## Conventions
 
 - `main.js` has no import-time side effects; `index.html`'s inline module imports `main` and calls it. Why: the Node test suite imports `main.js`, and only `render` needs a DOM. How to apply: keep new top-level code in `main.js` side-effect free.
-- UI changes are verified in a real browser; the Node unit tests cover only the domain layer. Why: nothing else catches wiring errors with no compile step. How to apply: `scripts/e2e` runs the Playwright suite in `web/e2e/` (July 2026); for exploratory poking, `scripts/serve` plus `playwright-cli`.
-- The UI suite reaches the app through `web/e2e/fixtures.js`: locators live on the `MonetaApp` page object, and anything that must exist before `main()` runs — seeded expenses, a fixed clock, the `Android` bridge — is set up by `app.open()`. Why: the app carries no test hooks, so the markup it happens to render is described in one place. How to apply: add locators and setup there rather than in a spec.
+- UI changes are verified in a real browser via `scripts/e2e`, the Playwright suite in `web/e2e/` (July 2026); the Node unit tests cover only the domain layer. Why: nothing else catches wiring errors with no compile step.
+- Exploratory poking at the UI goes through `scripts/serve` plus `playwright-cli`, outside the Playwright suite.
+- The UI suite reaches the app through `web/e2e/fixtures.js`, where locators live on the `MonetaApp` page object. Why: the app has no test hooks, so its markup is described in one place. How to apply: add locators there, not in a spec.
+- Anything that must exist before `main()` runs — seeded expenses, a fixed clock, the `Android` bridge — is installed by `app.open()` in `web/e2e/fixtures.js`.
+- Design rounds offer five variations at a time, each naming its cost; the user locks in pieces to keep. Why: costed alternatives converge faster than polishing one. How to apply: rewrite `design.html` each round rather than patching one option.
 - Behaviour changes bundled into a refactor are agreed with the user up front and reported individually afterwards. Why: in a port, a silent fix is indistinguishable from a porting error. How to apply: name each fix when handing back the work.
 - A defect found mid-task that was not part of the agreed scope is reported, not fixed. Why: it keeps an agreed change set reviewable. How to apply: work around it in tests and hand the decision back.
 
@@ -22,7 +25,12 @@ _Reference context — observed facts and standing conventions for this project,
 - Stubbing `window.alert` and `window.confirm` inside a `playwright-cli eval` is the practical way to exercise the validation and delete-confirmation paths; real dialogs block the evaluation. Under `@playwright/test` a `page.on("dialog")` listener does the same job, and without one Playwright dismisses every dialog — which reads as "no" to the delete confirmation.
 - A UI test that stops the clock and then adds several expenses gives them all one id, because ids are creation timestamps. `app.tick()` in the e2e fixtures moves a fixed clock forward between saves.
 - A `page.addInitScript` that seeds `localStorage` runs again on reload, so it has to write only when the key is absent; otherwise a reload restores the seed and hides what the app saved.
-- `@playwright/test` must match the Chromium build already downloaded, or every test fails at launch with "Executable doesn't exist"; `npx playwright install chromium` (what `scripts/e2e` runs) fetches the matching one.
+- Playwright's browsers come from Nix: `shell.nix` exports `PLAYWRIGHT_BROWSERS_PATH` to `pkgs.playwright.browsers`, and `scripts/e2e` downloads nothing.
+- `shell.nix` exports `FONTCONFIG_FILE` via `pkgs.makeFontsConf`. Why: with no fontconfig config Chromium aborts in Skia ("SkFontMgr_FontConfigInterface.cpp: Not implemented") on the first text it shapes.
+- A Chromium that dies mid-test reports as "Target page, context or browser has been closed" on whatever locator call was in flight; the real cause is the last `[pid=...][err]` line in the browser log.
+- `@playwright/test` in `web/package.json` is pinned exact to the nixpkgs `playwright-driver` version, 1.59.1 as of July 2026.
+- A Playwright release and a Chromium build number are a matched pair; when the npm version and the Nix browser set disagree, every test fails at launch with "Executable doesn't exist" naming a build absent from the store path.
+- A nixpkgs bump that moves `playwright-driver` re-breaks the suite until `@playwright/test` is re-pinned to match; `nix-instantiate --eval -E 'with import <nixpkgs> {}; playwright-driver.version'` reads the version to pin to.
 
 ## Decisions
 
@@ -34,9 +42,13 @@ _Reference context — observed facts and standing conventions for this project,
 - The modal and the import path share one `expenseError` check (July 2026), and the form's wording won: a blank imported description now reports "Description cannot be empty." rather than "Empty description."
 - An expense with no `categories` field loads as one with none (July 2026). Why: both the pre-refactor code and the first sorting version blanked the app at startup on such data, so tolerating it is a deliberate improvement.
 - Day headings call `formatDay`, a one-line delegate to `toIsoDate`, rather than `toIsoDate` itself. Why: the heading is free to stop looking like a stored date without touching the storage format.
-- The Playwright suite serves the app from its own `web/e2e/server.js` rather than from `scripts/serve` (July 2026). Why: `scripts/serve` publishes the *built* assets, which would make the UI suite depend on a full Android build; the test server maps the same URL names straight onto `web/` and `node_modules`, so no build step is involved and `index.html` is exercised unchanged.
-- The UI suite runs every spec twice, in Asia/Kolkata and America/New_York (July 2026), as `scripts/test` does. Why: the UI is full of dates, and a day that slips only west of the meridian must not pass unnoticed. How to apply: expectations about "today" are computed in the page, not in Node, since only the browser context carries the project's timezone.
-- The Android bridge is exercised in the browser against a recording stand-in installed before load, not on a device (July 2026). Why: it pins the JavaScript side's contract — `Android.createFile(filename, json)` and `Android.pickFile(callback)` — which is what the port could break; the Java side still needs an emulator run.
+- The Playwright suite serves the app from its own `web/e2e/server.js` rather than `scripts/serve` (July 2026). Why: `scripts/serve` publishes the *built* assets, which would make the UI suite depend on a full Android build.
+- `web/e2e/server.js` maps the app's URL names straight onto `web/` and `node_modules`, so the UI suite needs no build step and exercises `index.html` unchanged.
+- The UI suite runs every spec twice, in Asia/Kolkata and America/New_York (July 2026), as `scripts/test` does. Why: the UI is full of dates, and a day that slips only west of the meridian must not pass unnoticed.
+- Expectations about "today" in the UI suite are computed in the page, not in Node. Why: only the browser context carries the project's timezone.
+- The Android bridge is exercised in the browser against a recording stand-in installed before load, not on a device (July 2026). Why: it pins the JavaScript side's contract, which is what the port could break.
+- The bridge contract the UI suite pins is `Android.createFile(filename, json)` and `Android.pickFile(callback)`.
+- The stand-in bridge in the UI suite leaves the Java side of `MainActivity` untested; that still needs an emulator run.
 
 ## Open Questions
 

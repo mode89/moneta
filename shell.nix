@@ -27,5 +27,9 @@ in pkgs.mkShell {
   shellHook = ''
     export ANDROID_SDK_ROOT=${androidsdk}/libexec/android-sdk
     export AAPT2=$ANDROID_SDK_ROOT/build-tools/${buildToolsVersion}/aapt2
+    export PLAYWRIGHT_BROWSERS_PATH=${pkgs.playwright.browsers}
+    # Without a fontconfig config Chromium aborts in Skia on the first text it
+    # has to shape, killing the browser mid-test.
+    export FONTCONFIG_FILE=${pkgs.makeFontsConf { fontDirectories = [ pkgs.dejavu_fonts ]; }}
   '';
 }
