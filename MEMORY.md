@@ -81,7 +81,10 @@ _Reference context — observed facts and standing conventions for this project,
 - Capacitor's `getPlatformId` calls the platform "android" purely because `window.androidBridge` exists; nothing else is consulted.
 - A `registerPlugin` proxy reaches native code only when `Capacitor.PluginHeaders` names that plugin and method; `JSExport.java` injects the headers. Without a header and without a JS implementation the call throws "not implemented".
 - ESLint and Prettier ignore `.cache/`. Why: the Gradle home there unpacks Capacitor's own `native-bridge.js`, which alone fails the lint with 83 errors.
-- targetSdk 36 forces edge-to-edge display, so the app draws under the status and navigation bars; the agreed fix is `viewport-fit=cover` plus `env(safe-area-inset-*)` padding on the header and the sheet.
+- targetSdk 36 forces edge-to-edge display, so the app draws under the status and navigation bars, and every edge in the CSS carries its own spacing plus the bar's inset.
+- Capacitor 8 registers a built-in `SystemBars` plugin, with no package to install, which sets `--safe-area-inset-top/right/bottom/left` on the document element from the window insets.
+- `SystemBars` lets the insets reach the page only when the viewport meta carries `viewport-fit=cover` and the WebView is version 140 or later; otherwise it pads the WebView's parent view and the page never draws under the bars.
+- `env(safe-area-inset-*)` reports wrong figures on Android WebView before version 140 (Chromium issue 40699457), which is why `SystemBars` injects the CSS variables at all.
 
 ## Decisions
 
@@ -140,6 +143,8 @@ _Reference context — observed facts and standing conventions for this project,
 - The browser reaches Capacitor plugins through `registerPlugin("Filesystem")` from `@capacitor/core` alone; the plugin npm packages stay in `node_modules` only so `cap sync` compiles their Java.
 - The npm project sits at the repository root so the Capacitor layout is the stock one: `webDir` is the plain subpath `build/web/dist` and `android/` needs no `android.path` override.
 - The Gradle wrapper that `cap add android` generates is deleted, so the `gradle` pinned by `shell.nix` builds the app, run inside `android/`. Why: one Gradle version, as before the port. Cost: `npx cap run android` cannot be used.
+- Safe-area spacing reads `var(--safe-area-inset-top, env(safe-area-inset-top))`. Why: the variable is authoritative inside Capacitor, and a plain browser, where nothing sets it, falls back to `env()`.
+- `web/e2e/safe-area.spec.js` proves the safe-area CSS by setting the `--safe-area-inset-*` variables by hand and reading the computed spacing. Why: no browser here has a cutout, and only the figures, not the wiring, need a device.
 - The Capacitor port keeps the app zero-build: `webDir` points at `build/web/dist` and `npx cap sync` replaces `build-web`'s copy into the Android assets, so no bundler enters.
 
 ## Dead Ends

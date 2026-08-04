@@ -22,6 +22,13 @@
         --deep: #6f5c50;
         --pressed-seal: #8a3122;
         --display: "Fraunces", Georgia, serif;
+
+        /* Capacitor's built-in SystemBars plugin sets --safe-area-inset-* on
+           the document element, because env() reports the wrong figures on
+           Android WebView before version 140. In a plain browser nothing sets
+           them and env() answers, which is 0 unless the screen has a cutout. */
+        --safe-top: var(--safe-area-inset-top, env(safe-area-inset-top));
+        --safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom));
       }
 
       * { box-sizing: border-box; }
@@ -73,11 +80,14 @@
         overflow-y: auto;
         background: var(--paper);
         -webkit-overflow-scrolling: touch;
-        padding-bottom: 96px;
+        padding-bottom: calc(96px + var(--safe-bottom));
       }
 
+      /* the app draws under the status and navigation bars, so everything held
+         against an edge adds that bar's inset to its own spacing */
+
       /* header */
-      .head { padding: 24px 22px 12px; position: relative; }
+      .head { padding: calc(24px + var(--safe-top)) 22px 12px; position: relative; }
       .month {
         font-family: var(--display);
         font-size: 1.9rem;
@@ -110,7 +120,7 @@
       .meta span { white-space: nowrap; }
       .corner {
         position: absolute;
-        top: 20px;
+        top: calc(20px + var(--safe-top));
         right: 16px;
         width: 44px;
         height: 44px;
@@ -229,7 +239,7 @@
       .fab {
         position: absolute;
         right: 20px;
-        bottom: 22px;
+        bottom: calc(22px + var(--safe-bottom));
         width: 62px;
         height: 62px;
         border-radius: 50%;
@@ -251,7 +261,7 @@
       .notice {
         position: absolute;
         left: 50%;
-        bottom: 34px;
+        bottom: calc(34px + var(--safe-bottom));
         transform: translateX(-50%);
         background: var(--ink);
         color: var(--paper);
@@ -284,7 +294,7 @@
         overflow-y: auto;
         background: var(--paper);
         border-radius: 28px 28px 0 0;
-        padding: 8px 22px 26px;
+        padding: 8px 22px calc(26px + var(--safe-bottom));
         box-shadow: 0 -14px 40px rgba(47, 42, 42, 0.22);
         z-index: 9;
       }
@@ -369,7 +379,7 @@
         display: flex;
         flex-direction: column;
       }
-      .bar { padding: 24px 22px 14px; position: relative; }
+      .bar { padding: calc(24px + var(--safe-top)) 22px 14px; position: relative; }
       .bar h2 { font-family: var(--display); font-weight: 600; font-size: 1.7rem; margin: 0; }
       .group-label {
         font-size: 0.66rem;
