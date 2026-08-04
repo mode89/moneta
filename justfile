@@ -1,5 +1,5 @@
-mdi_dir := "web/node_modules/@material-design-icons/svg/outlined"
-apk := "android/build/outputs/apk/debug/android-debug.apk"
+mdi_dir := "node_modules/@material-design-icons/svg/outlined"
+apk := "android/app/build/outputs/apk/debug/app-debug.apk"
 
 # List the available recipes.
 default:
@@ -10,24 +10,24 @@ test: deps
     # The zone is pinned so results do not follow the machine; test/timezone.test.js
     # sets its own zones. A directory argument is read as a module path; only a
     # glob selects the files.
-    cd web && TZ=Asia/Kolkata node --test "test/*.test.js"
+    TZ=Asia/Kolkata node --test "web/test/*.test.js"
 
 # Run the Playwright UI suite in web/e2e/; takes Playwright's own arguments.
 test-browser *args: deps
-    cd web && npx playwright test {{ args }}
+    npx playwright test {{ args }}
 
 # Check the JavaScript in web/ with ESLint and Prettier.
 lint: deps
-    cd web && npx eslint .
-    cd web && npx prettier --check .
+    npx eslint .
+    npx prettier --check .
 
 # Reformat the JavaScript in web/ with Prettier.
 format: deps
-    cd web && npx prettier --write .
+    npx prettier --write .
 
 # Serve the web app on port 8080 for browser-based iteration.
 serve: build-web
-    cd android/src/main/assets/web && python3 -m http.server 8080
+    cd build/web/dist && python3 -m http.server 8080
 
 # Create the moneta AVD if missing and start the emulator.
 emulator:
@@ -64,32 +64,39 @@ build-web: deps
     sed "s#%VERSION%#${version}#g" web/index.html > build/web/dist/index.html
     cp \
         web/main.js \
-        web/node_modules/bootstrap/dist/css/bootstrap.css \
+        node_modules/bootstrap/dist/css/bootstrap.css \
         {{ mdi_dir }}/file_download.svg \
         {{ mdi_dir }}/file_upload.svg \
         build/web/dist
-    cp web/node_modules/solid-js/dist/solid.js build/web/dist/solid.js
-    cp web/node_modules/solid-js/web/dist/web.js build/web/dist/solid-web.js
-    cp web/node_modules/solid-js/store/dist/store.js build/web/dist/solid-store.js
-    cp web/node_modules/solid-js/html/dist/html.js build/web/dist/solid-html.js
-    cp web/node_modules/solid-transition-group/dist/index.js build/web/dist/solid-transition-group.js
-    cp web/node_modules/@solid-primitives/transition-group/dist/index.js build/web/dist/sp-transition-group.js
-    cp web/node_modules/@solid-primitives/refs/dist/index.js build/web/dist/sp-refs.js
-    cp web/node_modules/@solid-primitives/utils/dist/index.js build/web/dist/sp-utils.js
+    cp node_modules/solid-js/dist/solid.js build/web/dist/solid.js
+    cp node_modules/solid-js/web/dist/web.js build/web/dist/solid-web.js
+    cp node_modules/solid-js/store/dist/store.js build/web/dist/solid-store.js
+    cp node_modules/solid-js/html/dist/html.js build/web/dist/solid-html.js
+    cp node_modules/solid-transition-group/dist/index.js build/web/dist/solid-transition-group.js
+    cp node_modules/@solid-primitives/transition-group/dist/index.js build/web/dist/sp-transition-group.js
+    cp node_modules/@solid-primitives/refs/dist/index.js build/web/dist/sp-refs.js
+    cp node_modules/@solid-primitives/utils/dist/index.js build/web/dist/sp-utils.js
     # sp-utils.js re-exports ./types.js, a relative import no import map covers.
-    cp web/node_modules/@solid-primitives/utils/dist/types.js build/web/dist/types.js
-    rm -rf android/src/main/assets/web
-    cp -r build/web/dist android/src/main/assets/web
+    cp node_modules/@solid-primitives/utils/dist/types.js build/web/dist/types.js
+
+# Copy the web app into the Android project and refresh its Capacitor plugins.
+sync: build-web
+    #!/usr/bin/env bash
+    set -e
+    echo
+    echo "========================= Syncing Capacitor ========================"
+    echo
+    npx cap sync android
 
 # Package the Android app around the copied web assets.
-build-android: build-web
+build-android: sync
     #!/usr/bin/env bash
     set -e
     echo
     echo "====================== Building Android app ========================"
     echo
-    gradle -Dorg.gradle.project.android.aapt2FromMavenOverride=${AAPT2:?} build
+    cd android && gradle -Dorg.gradle.project.android.aapt2FromMavenOverride=${AAPT2:?} build
 
 # Install the web dependencies.
 deps:
-    @cd web && npm install
+    @npm install

@@ -1,0 +1,12 @@
+node_modules/
+test-results/
+playwright-report/
+build/
+android/
+package-lock.json
+
+# Documentation is hand-wrapped.
+*.md
+# The page shell is hand-laid-out around the import map, the custom CSS and the
+# %VERSION% placeholder that build-web substitutes.
+web/index.html

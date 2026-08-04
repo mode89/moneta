@@ -1,0 +1,25 @@
+{
+  "name": "moneta",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/share": "^8.0.1",
+    "@material-design-icons/svg": "^0.14.15",
+    "@playwright/cli": "^0.1.17",
+    "bootstrap": "^5.3.0",
+    "solid-js": "^1.9.14",
+    "solid-transition-group": "^0.3.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.0",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.59.1",
+    "eslint": "^10.8.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.9.0",
+    "prettier": "^3.9.6"
+  }
+}

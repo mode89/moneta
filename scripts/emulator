@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import re
 import subprocess
 import sys
@@ -55,9 +56,9 @@ def create_avd(avd_name, sdk_package):
 
 def enable_hardware_keyboard(avd_name):
     """Enable hardware keyboard for the AVD."""
-    home_dir = Path.home()
-    config_file = home_dir / \
-        ".android" / "avd" / f"{avd_name}.avd" / "config.ini"
+    avd_home = Path(
+        os.environ.get("ANDROID_AVD_HOME", Path.home() / ".android" / "avd"))
+    config_file = avd_home / f"{avd_name}.avd" / "config.ini"
 
     if not config_file.exists():
         print(f"Warning: AVD config file not found at {config_file}")

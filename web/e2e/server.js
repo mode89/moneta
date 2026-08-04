@@ -8,7 +8,7 @@ import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const WEB_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
-const MODULES = join(WEB_DIR, "node_modules");
+const MODULES = join(WEB_DIR, "..", "node_modules");
 const ICONS = join(MODULES, "@material-design-icons/svg/outlined");
 
 // Mirrors the copy list in the `build-web` recipe; keep the two in step.

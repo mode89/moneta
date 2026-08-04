@@ -1,28 +1,37 @@
-apply plugin: 'com.android.application'
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
 
-android {
-    compileSdkVersion 36
-    buildToolsVersion "36.0.0"
-    defaultConfig {
-        applicationId "net.akrain.moneta"
-        namespace "net.akrain.moneta"
-        minSdkVersion 28
-        targetSdkVersion 36
-        versionCode 1
-        versionName "1.0"
-        testInstrumentationRunner \
-            "android.support.test.runner.AndroidJUnitRunner"
+buildscript {
+    
+    repositories {
+        google()
+        mavenCentral()
     }
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles \
-                getDefaultProguardFile("proguard-android-optimize.txt"), \
-                "proguard-rules.pro"
-        }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.13.0'
+        classpath 'com.google.gms:google-services:4.4.4'
+
+        // NOTE: Do not place your application dependencies here; they belong
+        // in the individual module build.gradle files
     }
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_21
-        targetCompatibility JavaVersion.VERSION_21
+}
+
+apply from: "variables.gradle"
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
     }
+}
+
+// The Nix Android SDK is read-only, so no module may fall back to AGP's own
+// build-tools default and try to download it.
+subprojects {
+    plugins.withId('com.android.base') {
+        android.buildToolsVersion = rootProject.ext.buildToolsVersion
+    }
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
 }

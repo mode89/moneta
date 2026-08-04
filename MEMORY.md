@@ -6,6 +6,8 @@ _Reference context — observed facts and standing conventions for this project,
 - `knownCategories(expenses, extra)` orders the sheet's offered chips: names the form carries that no expense uses yet first, then used ones by newest expense date, ties by name. It ranks by `expense.date`, a `Date` in state.
 - Categories are kept sorted at every entry point: `parseCategories` sorts typed input and `parseExpenses` sorts what it reads. Views therefore join them without sorting, and importing rewrites a file's category order.
 - The Playwright suite in `web/e2e/` is the only written specification of the UI: its wording, grouping, totals, blur behaviour and dialog flows exist nowhere else in prose.
+- The Android host is Capacitor: `MainActivity` is an empty `BridgeActivity` subclass, and `npx cap sync android` copies the built web app into `android/app/src/main/assets/public`.
+- The npm project lives at the repository root — `package.json`, `node_modules`, `capacitor.config.json`, the ESLint, Prettier and Playwright configs — while `web/` holds only `index.html`, `main.js`, `test/` and `e2e/`.
 - Every local-date read in `main.js` goes through the exported date helpers (`toIsoDate`, `parseIsoDate`, `formatDay`, `isSameMonth`, `beginningOfDay`, `groupByDay`); the component layer above them calls `new Date` only inside `now()`.
 
 ## Conventions
@@ -33,12 +35,13 @@ _Reference context — observed facts and standing conventions for this project,
 
 ## Gotchas
 
-- `MainActivity` has no `onBackPressed` override, so the Android back button finishes the activity — with a dialog open it closes the whole app rather than the dialog.
+- Nothing listens for the Android back button, so it finishes the activity — with a dialog open it closes the whole app rather than the dialog.
 - A category is one lowercase word, since `parseCategories` splits on whitespace. The chip-style category input therefore commits on space, and two-word names are impossible without a storage-format change.
 - In `solid-js/html`, reading a signal inside the expression that renders an `<input>` rebuilds that input on every keystroke and loses what was typed. Draft text has to live in a plain variable outside the reactive graph.
 - `solid-js/html` drops the static whitespace between an element and the expression that follows it, so `<b>${n}</b> ${word}` renders as `1expense`; the space has to be part of the interpolated string.
 - A CSS `gap` on a flex line hides missing text spacing: the page looks right while the DOM text runs the words together, which is what a screen reader and a copy-paste get.
-- `android/src/main/assets/web/` holds build output that can lag `web/`, so the installed APK shows a stale UI until `just build` runs; a bug seen "in the app" may be a bug in old assets. `just serve` refreshes them first, so it is safe.
+- `android/app/src/main/assets/public/` holds build output that can lag `web/`, so the installed APK shows a stale UI until `just build` runs; a bug seen "in the app" may be a bug in old assets.
+- `just serve` refreshes the assets it serves before serving them, so it never shows a stale UI.
 - `just build-web` and `web/e2e/server.js` copy and serve `bootstrap.css`, `file_download.svg` and `file_upload.svg`, which `web/index.html` no longer references.
 - Two expenses added within the same millisecond receive the same `id`, after which `updateExpense` and `deleteExpense` act on both. Tapping the button cannot reach this; programmatic callers and tests can.
 - `playwright-cli click` against this app reports "performing click action" and then stalls without the click taking effect. Driving the DOM through `playwright-cli eval` with `element.click()` works reliably.
@@ -52,7 +55,9 @@ _Reference context — observed facts and standing conventions for this project,
 - Dropping one of two Playwright projects does not halve the wall clock: 344 tests across both zones ran in 34.5s, 172 in one zone in 46.7s, because the worker pool fills either way.
 - `just` has no file-timestamp dependency tracking, so `npm install` runs on every `test`, `test-browser` and `build-web` through the shared `deps` recipe, adding about 0.4s.
 - A `just` recipe runs each line in a separate shell unless it starts with a `#!/usr/bin/env bash` shebang, so a multi-line recipe carrying variables needs one.
-- `just build` packages the APK here; the `:android:validateSigningDebug` failure with `?` for `$HOME`, recorded earlier as a sandbox landmine, did not recur under SDK 36, Gradle 8.14.4 and JDK 21.
+- Gradle and the Android tools take their user home from the passwd entry for the running uid, Java's `user.home`, not from `$HOME`; where the two differ, caches and AVDs land outside the intended home.
+- A uid with no passwd entry at all leaves Java's `user.home` as `?`, which is the `:android:validateSigningDebug` failure recorded earlier as a sandbox landmine.
+- `scripts/emulator` reads `ANDROID_AVD_HOME` before falling back to `~/.android/avd`, so it still finds the AVD config when the two disagree.
 - `web/index.html` loads Fraunces and DM Sans from Google Fonts, so anything that opens the page waits on the public internet for the `load` event: `just serve`, a throwaway script, and the UI suite alike.
 - An external stall in the UI suite shows up as `page.goto` timing out, on a different spec each time; it struck 1 run in 10 until `fixtures.js` began answering the Google Fonts request itself.
 - A process started with `&` inside `nix-shell --run` holds the output pipe open, so the command never returns even once that process is killed. Redirecting the child's output to `/dev/null` releases it.
@@ -64,9 +69,9 @@ _Reference context — observed facts and standing conventions for this project,
 - Playwright's browsers come from Nix: `shell.nix` exports `PLAYWRIGHT_BROWSERS_PATH` to `pkgs.playwright.browsers`, and `just test-browser` downloads nothing.
 - `shell.nix` exports `FONTCONFIG_FILE` via `pkgs.makeFontsConf`. Why: with no fontconfig config Chromium aborts in Skia ("SkFontMgr_FontConfigInterface.cpp: Not implemented") on the first text it shapes.
 - A Chromium that dies mid-test reports as "Target page, context or browser has been closed" on whatever locator call was in flight; the real cause is the last `[pid=...][err]` line in the browser log.
-- `web/node_modules/playwright` is a 1.62 alpha pulled in by `@playwright/cli`, and its Chromium build is absent from the Nix browser set.
-- A script outside the UI suite imports `chromium` from `web/node_modules/@playwright/test/node_modules/playwright`, the copy whose browser build the Nix set holds.
-- `@playwright/test` in `web/package.json` is pinned exact to the nixpkgs `playwright-driver` version, 1.59.1 as of July 2026.
+- `node_modules/playwright` is a 1.62 alpha pulled in by `@playwright/cli`, and its Chromium build is absent from the Nix browser set.
+- A script outside the UI suite imports `chromium` from `node_modules/@playwright/test/node_modules/playwright`, the copy whose browser build the Nix set holds.
+- `@playwright/test` in `package.json` is pinned exact to the nixpkgs `playwright-driver` version, 1.59.1 as of July 2026.
 - A Playwright release and a Chromium build number are a matched pair; when the npm version and the Nix browser set disagree, every test fails at launch with "Executable doesn't exist" naming a build absent from the store path.
 - A nixpkgs bump that moves `playwright-driver` re-breaks the suite until `@playwright/test` is re-pinned to match; `nix-instantiate --eval -E 'with import <nixpkgs> {}; playwright-driver.version'` reads the version to pin to.
 - `@capacitor/core`'s `dist/index.js` is one self-contained ES module with no `import` statements, so it drops into the import map and the three copy lists exactly as Solid's files do.
@@ -127,6 +132,8 @@ _Reference context — observed facts and standing conventions for this project,
 - Export under Capacitor becomes `Filesystem.writeFile` to the cache directory plus a Share sheet. Why: Capacitor offers no system Save-As dialog.
 - Import under Capacitor drops its native branch, since Capacitor's WebView implements `onShowFileChooser` and the existing `<input type=file>` path should reach the system picker.
 - The browser reaches Capacitor plugins through `registerPlugin("Filesystem")` from `@capacitor/core` alone; the plugin npm packages stay in `node_modules` only so `cap sync` compiles their Java.
+- The npm project sits at the repository root so the Capacitor layout is the stock one: `webDir` is the plain subpath `build/web/dist` and `android/` needs no `android.path` override.
+- The Gradle wrapper that `cap add android` generates is deleted, so the `gradle` pinned by `shell.nix` builds the app, run inside `android/`. Why: one Gradle version, as before the port. Cost: `npx cap run android` cannot be used.
 - The Capacitor port keeps the app zero-build: `webDir` points at `build/web/dist` and `npx cap sync` replaces `build-web`'s copy into the Android assets, so no bundler enters.
 
 ## Dead Ends

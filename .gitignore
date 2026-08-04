@@ -1,4 +1,6 @@
-/android/build
 /build
-/.gradle
+/.cache
 .playwright-cli
+node_modules
+test-results
+playwright-report

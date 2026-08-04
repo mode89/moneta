@@ -1,7 +1,0 @@
-node_modules/
-test-results/
-playwright-report/
-package-lock.json
-# The page shell is hand-laid-out around the import map, the custom CSS and the
-# %VERSION% placeholder that build-web substitutes.
-index.html
