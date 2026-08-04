@@ -1,11 +1,11 @@
 // Shared test fixtures: a page object over the app's markup, a dialog recorder
 // (the app still talks to the user through `alert` when a file or a form is
-// wrong), and helpers for seeding `localStorage` and for the Android bridge.
+// wrong), and helpers for seeding `localStorage` and for the native bridge.
 //
 // The app carries no test hooks, so locators are built from the roles, labels
 // and class names `main.js` actually renders. Anything that needs to be in
-// place before the module runs — stored expenses, a fixed clock, the `Android`
-// object — is installed by `app.open()` before it navigates.
+// place before the module runs — stored expenses, a fixed clock, the Capacitor
+// bridge — is installed by `app.open()` before it navigates.
 import { test as base, expect } from "@playwright/test";
 
 export { expect };
@@ -155,8 +155,8 @@ export class MonetaApp {
   }
 
   // `expenses` are seeded in stored form (`date` as YYYY-MM-DD); `now` fixes
-  // the clock; `android` installs a recording stand-in for the WebView bridge.
-  async open({ expenses, now, android = false } = {}) {
+  // the clock; `native` installs a recording stand-in for the WebView bridge.
+  async open({ expenses, now, native = false } = {}) {
     if (now) {
       this.fixedTime = new Date(now).getTime();
       await this.page.clock.setFixedTime(now);
@@ -171,7 +171,7 @@ export class MonetaApp {
         },
         [STORAGE_KEY, JSON.stringify(expenses)],
       );
-    if (android) await installAndroidBridge(this.page);
+    if (native) await installCapacitorBridge(this.page);
     // index.html fetches its typefaces from Google. `goto` waits for the `load`
     // event, which waits for that stylesheet, so a stalled request out on the
     // public internet times the navigation out. Answering it here keeps the
@@ -371,30 +371,49 @@ export class MonetaApp {
   }
 }
 
-// A stand-in for the object `MainActivity` injects, recording what the app
-// asks of it. `Android.pickFile` takes a callback the host calls back with the
-// file's text; `respondToPickFile` plays the host's part.
-export async function installAndroidBridge(page) {
+// A stand-in for what Capacitor's WebView injects into the page: the
+// `androidBridge` object, whose presence alone makes the platform "android";
+// the plugin headers `registerPlugin` reads to know which calls are native;
+// and `nativePromise`, which every such call goes through. Calls are recorded
+// and answered here, `failNextCallTo` making one plugin's next call fail.
+export async function installCapacitorBridge(page) {
   await page.addInitScript(() => {
-    window.__android = { createFile: [], pickFile: 0 };
-    window.Android = {
-      createFile(filename, content) {
-        window.__android.createFile.push({ filename, content });
-      },
-      pickFile(callback) {
-        window.__android.pickFile += 1;
-        window.__androidPickFileCallback = callback;
+    window.androidBridge = { postMessage() {} };
+    window.__native = { calls: [], failures: {} };
+    window.Capacitor = {
+      PluginHeaders: [
+        {
+          name: "Filesystem",
+          methods: [{ name: "writeFile", rtype: "promise" }],
+        },
+        { name: "Share", methods: [{ name: "share", rtype: "promise" }] },
+      ],
+      nativePromise(plugin, method, options) {
+        window.__native.calls.push({ plugin, method, options });
+        const failure = window.__native.failures[plugin];
+        if (failure !== undefined) {
+          delete window.__native.failures[plugin];
+          return Promise.reject(new Error(failure));
+        }
+        if (plugin === "Filesystem")
+          return Promise.resolve({ uri: "file:///cache/" + options.path });
+        return Promise.resolve({});
       },
     };
   });
 }
 
-export function androidCalls(page) {
-  return page.evaluate(() => window.__android);
+export function nativeCalls(page) {
+  return page.evaluate(() => window.__native.calls);
 }
 
-export async function respondToPickFile(page, json) {
-  await page.evaluate((json) => window.__androidPickFileCallback(json), json);
+export function failNextCallTo(page, plugin, message) {
+  return page.evaluate(
+    ([plugin, message]) => {
+      window.__native.failures[plugin] = message;
+    },
+    [plugin, message],
+  );
 }
 
 // Hands a file to the import flow and stops at the confirmation card, which

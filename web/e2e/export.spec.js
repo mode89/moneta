@@ -1,5 +1,5 @@
 // Exporting in a plain browser hands the file to the download machinery; the
-// Android branch is covered in android-bridge.spec.js.
+// native branch is covered in capacitor-bridge.spec.js.
 import { test, expect, downloadedText, exportFile } from "./fixtures.js";
 
 const FEBRUARY = "2026-02-12T12:00:00Z";

@@ -16,6 +16,7 @@ const FILES = {
   "/index.html": join(WEB_DIR, "index.html"),
   "/main.js": join(WEB_DIR, "main.js"),
   "/bootstrap.css": join(MODULES, "bootstrap/dist/css/bootstrap.css"),
+  "/capacitor-core.js": join(MODULES, "@capacitor/core/dist/index.js"),
   "/solid.js": join(MODULES, "solid-js/dist/solid.js"),
   "/solid-web.js": join(MODULES, "solid-js/web/dist/web.js"),
   "/solid-store.js": join(MODULES, "solid-js/store/dist/store.js"),

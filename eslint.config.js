@@ -8,6 +8,7 @@ export default [
   {
     ignores: [
       "node_modules/",
+      ".cache/",
       "test-results/",
       "playwright-report/",
       "build/",

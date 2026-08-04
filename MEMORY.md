@@ -6,6 +6,7 @@ _Reference context — observed facts and standing conventions for this project,
 - `knownCategories(expenses, extra)` orders the sheet's offered chips: names the form carries that no expense uses yet first, then used ones by newest expense date, ties by name. It ranks by `expense.date`, a `Date` in state.
 - Categories are kept sorted at every entry point: `parseCategories` sorts typed input and `parseExpenses` sorts what it reads. Views therefore join them without sorting, and importing rewrites a file's category order.
 - The Playwright suite in `web/e2e/` is the only written specification of the UI: its wording, grouping, totals, blur behaviour and dialog flows exist nowhere else in prose.
+- `main.js` branches on `Capacitor.isNativePlatform()` in `exportExpenses` alone: the native path writes the file with `Filesystem` and offers it through `Share`, while importing uses the browser's `<input type=file>` on both platforms.
 - The Android host is Capacitor: `MainActivity` is an empty `BridgeActivity` subclass, and `npx cap sync android` copies the built web app into `android/app/src/main/assets/public`.
 - The npm project lives at the repository root — `package.json`, `node_modules`, `capacitor.config.json`, the ESLint, Prettier and Playwright configs — while `web/` holds only `index.html`, `main.js`, `test/` and `e2e/`.
 - Every local-date read in `main.js` goes through the exported date helpers (`toIsoDate`, `parseIsoDate`, `formatDay`, `isSameMonth`, `beginningOfDay`, `groupByDay`); the component layer above them calls `new Date` only inside `now()`.
@@ -76,6 +77,10 @@ _Reference context — observed facts and standing conventions for this project,
 - A nixpkgs bump that moves `playwright-driver` re-breaks the suite until `@playwright/test` is re-pinned to match; `nix-instantiate --eval -E 'with import <nixpkgs> {}; playwright-driver.version'` reads the version to pin to.
 - `@capacitor/core`'s `dist/index.js` is one self-contained ES module with no `import` statements, so it drops into the import map and the three copy lists exactly as Solid's files do.
 - `window.Capacitor.Plugins.X` proxies are built by `@capacitor/core`'s `registerPlugin`, not by the injected `native-bridge.js`; the injected bridge supplies only `toNative`, `nativePromise` and `nativeCallback`.
+- Importing `@capacitor/core` assigns `window.Capacitor` on every platform, so `Capacitor.isNativePlatform()` is an imported binding: no `window.` prefix and no optional chaining, unlike the `window.Android` test it replaced.
+- Capacitor's `getPlatformId` calls the platform "android" purely because `window.androidBridge` exists; nothing else is consulted.
+- A `registerPlugin` proxy reaches native code only when `Capacitor.PluginHeaders` names that plugin and method; `JSExport.java` injects the headers. Without a header and without a JS implementation the call throws "not implemented".
+- ESLint and Prettier ignore `.cache/`. Why: the Gradle home there unpacks Capacitor's own `native-bridge.js`, which alone fails the lint with 83 errors.
 - targetSdk 36 forces edge-to-edge display, so the app draws under the status and navigation bars; the agreed fix is `viewport-fit=cover` plus `env(safe-area-inset-*)` padding on the header and the sheet.
 
 ## Decisions
@@ -131,6 +136,7 @@ _Reference context — observed facts and standing conventions for this project,
 - The port accepts losing every installed copy's `localStorage`, because `file://` and `http://localhost` are different origins. Why: only the author uses the app.
 - Export under Capacitor becomes `Filesystem.writeFile` to the cache directory plus a Share sheet. Why: Capacitor offers no system Save-As dialog.
 - Import under Capacitor drops its native branch, since Capacitor's WebView implements `onShowFileChooser` and the existing `<input type=file>` path should reach the system picker.
+- The UI suite's native stand-in imitates what the WebView injects — `window.androidBridge`, `Capacitor.PluginHeaders` and `nativePromise` — rather than the app's plugin objects. Why: the plugin proxies then come from Capacitor's own code.
 - The browser reaches Capacitor plugins through `registerPlugin("Filesystem")` from `@capacitor/core` alone; the plugin npm packages stay in `node_modules` only so `cap sync` compiles their Java.
 - The npm project sits at the repository root so the Capacitor layout is the stock one: `webDir` is the plain subpath `build/web/dist` and `android/` needs no `android.path` override.
 - The Gradle wrapper that `cap add android` generates is deleted, so the `gradle` pinned by `shell.nix` builds the app, run inside `android/`. Why: one Gradle version, as before the port. Cost: `npx cap run android` cannot be used.

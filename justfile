@@ -72,6 +72,7 @@ build-web: deps
     cp node_modules/solid-js/web/dist/web.js build/web/dist/solid-web.js
     cp node_modules/solid-js/store/dist/store.js build/web/dist/solid-store.js
     cp node_modules/solid-js/html/dist/html.js build/web/dist/solid-html.js
+    cp node_modules/@capacitor/core/dist/index.js build/web/dist/capacitor-core.js
     cp node_modules/solid-transition-group/dist/index.js build/web/dist/solid-transition-group.js
     cp node_modules/@solid-primitives/transition-group/dist/index.js build/web/dist/sp-transition-group.js
     cp node_modules/@solid-primitives/refs/dist/index.js build/web/dist/sp-refs.js

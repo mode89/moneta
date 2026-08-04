@@ -2,7 +2,13 @@ import { createMemo, createSignal, untrack, For } from "solid-js";
 import { createStore } from "solid-js/store";
 import { render } from "solid-js/web";
 import html from "solid-js/html";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Transition } from "solid-transition-group";
+
+// The plugins' own JavaScript cannot be loaded without a bundler, so the app
+// asks the native bridge for them by name; in a browser they stay unused.
+const Filesystem = registerPlugin("Filesystem");
+const Share = registerPlugin("Share");
 
 export const [expenses, setExpenses] = createStore([]);
 const [editedExpense, setEditedExpense] = createSignal(null);
@@ -560,8 +566,8 @@ export function importMessage(review, current) {
 function exportExpenses() {
   const json = serializeExpenses(expenses);
   const filename = "moneta-" + toIsoDate(now()) + ".json";
-  if (window.Android) {
-    Android.createFile(filename, json);
+  if (Capacitor.isNativePlatform()) {
+    shareExport(filename, json);
     return;
   }
   const url = URL.createObjectURL(
@@ -576,11 +582,26 @@ function exportExpenses() {
   URL.revokeObjectURL(url);
 }
 
-function importExpenses() {
-  if (window.Android) {
-    Android.pickFile((json) => reviewImport(json, null));
-    return;
+// Android offers no Save-As dialog, so the file is written to the cache
+// directory and handed to the system share sheet. The directory and encoding
+// are the plain strings the Directory and Encoding enums hold.
+async function shareExport(filename, json) {
+  try {
+    const { uri } = await Filesystem.writeFile({
+      path: filename,
+      data: json,
+      directory: "CACHE",
+      encoding: "utf8",
+    });
+    await Share.share({ title: filename, url: uri });
+  } catch (e) {
+    // Dismissing the share sheet rejects the call; that is not a failure.
+    if (e.message !== "Share canceled")
+      alert("Failed to export expenses: " + e.message);
   }
+}
+
+function importExpenses() {
   const input = document.createElement("input");
   input.type = "file";
   input.accept = ".json";
