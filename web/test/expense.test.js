@@ -316,13 +316,6 @@ describe("importMessage", () => {
     );
   });
 
-  test("speaks of a file it cannot name, as the Android picker gives none", () => {
-    assert.match(
-      importMessage({ filename: null, count: 1 }, 2),
-      /^This file holds 1 expense\./,
-    );
-  });
-
   test("claims nothing is lost when there is nothing to lose", () => {
     assert.match(
       importMessage({ filename: "a.json", count: 3 }, 0),

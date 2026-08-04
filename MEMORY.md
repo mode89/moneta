@@ -6,9 +6,6 @@ _Reference context — observed facts and standing conventions for this project,
 - `knownCategories(expenses, extra)` orders the sheet's offered chips: names the form carries that no expense uses yet first, then used ones by newest expense date, ties by name. It ranks by `expense.date`, a `Date` in state.
 - Categories are kept sorted at every entry point: `parseCategories` sorts typed input and `parseExpenses` sorts what it reads. Views therefore join them without sorting, and importing rewrites a file's category order.
 - The Playwright suite in `web/e2e/` is the only written specification of the UI: its wording, grouping, totals, blur behaviour and dialog flows exist nowhere else in prose.
-- `main.js` branches on `Capacitor.isNativePlatform()` in `exportExpenses` alone: the native path writes the file with `Filesystem` and offers it through `Share`, while importing uses the browser's `<input type=file>` on both platforms.
-- The Android host is Capacitor: `MainActivity` is an empty `BridgeActivity` subclass, and `npx cap sync android` copies the built web app into `android/app/src/main/assets/public`.
-- The npm project lives at the repository root — `package.json`, `node_modules`, `capacitor.config.json`, the ESLint, Prettier and Playwright configs — while `web/` holds only `index.html`, `main.js`, `test/` and `e2e/`.
 - Every local-date read in `main.js` goes through the exported date helpers (`toIsoDate`, `parseIsoDate`, `formatDay`, `isSameMonth`, `beginningOfDay`, `groupByDay`); the component layer above them calls `new Date` only inside `now()`.
 
 ## Conventions
@@ -18,14 +15,13 @@ _Reference context — observed facts and standing conventions for this project,
 - Exploratory poking at the UI goes through `just serve` plus `playwright-cli`, outside the Playwright suite.
 - A claim about an animation is settled by sampling `getComputedStyle` at fixed delays through a press, not by eye or screenshot. Why: mid-transition values pinpointed two press-state stutters that screenshots could not show.
 - A view with no suite coverage yet is checked by a throwaway Node script that seeds `localStorage`, fixes the clock and screenshots each state. Why: it sees what a locator assertion cannot.
-- A runtime npm dependency reaches the browser through three lists kept in step: the `cp` block in `build-web`, `FILES` in `web/e2e/server.js`, and the import map in `web/index.html`. Why: no bundler, so a missing entry is a blank page.
 - Long-running commands are given an explicit timeout. Why: a `nix-shell --run` that hung on a background server ran for 147 seconds before the user aborted it. How to apply: suite runs, builds, and anything that starts a server.
 - `just` recipes are run without asking the user first, Playwright included: they build, test, serve or drive a headless browser, all locally. Why: the user gave this standing permission after a Playwright run was queued for confirmation.
 - The UI suite reaches the app through `web/e2e/fixtures.js`, where locators live on the `MonetaApp` page object. Why: the app has no test hooks, so its markup is described in one place. How to apply: add locators there, not in a spec.
 - `MonetaApp` helpers that describe rendered content expose a locator, not an awaited snapshot. Why: `expect(await …).toEqual(…)` compares plain values and never retries, so it reads the DOM mid-render.
 - Lists rendered by the app are asserted with `expect(locator).toHaveText([...])`, which retries on both the element count and the texts.
 - A change to the UI suite's timing is judged by running the whole suite ~50 times, not once. Why: the one flake found this way struck 2 runs in 50, which ten runs had called clean.
-- Anything that must exist before `main()` runs — seeded expenses, a fixed clock, the `Android` bridge — is installed by `app.open()` in `web/e2e/fixtures.js`.
+- Anything that must exist before `main()` runs — seeded expenses, a fixed clock, the Capacitor bridge — is installed by `app.open()` in `web/e2e/fixtures.js`.
 - A UI test that seeds dated expenses also fixes the clock with `open({ now })`. Why: an expense outside the current month renders as a fold line, not a row, so a real clock silently empties the list. How to apply: any spec with seeded dates.
 - A new development command is added as a `just` recipe rather than a script in `scripts/`. Why: `just --list` is the single index of what can be run here. How to apply: any build, test, serve or device task.
 - Design work is presented as five variations at a time, each naming its cost, in one self-contained static mockup file; the user locks in the pieces to keep. Why: costed alternatives converge faster than polishing a single option.
@@ -36,7 +32,7 @@ _Reference context — observed facts and standing conventions for this project,
 
 ## Gotchas
 
-- Nothing listens for the Android back button, so it finishes the activity — with a dialog open it closes the whole app rather than the dialog.
+- Nothing listens for the Android back button, so it finishes the activity — with a dialog open it closes the whole app rather than the dialog. `@capacitor/android` carries no back handling of its own, and `@capacitor/app` is not installed.
 - A category is one lowercase word, since `parseCategories` splits on whitespace. The chip-style category input therefore commits on space, and two-word names are impossible without a storage-format change.
 - In `solid-js/html`, reading a signal inside the expression that renders an `<input>` rebuilds that input on every keystroke and loses what was typed. Draft text has to live in a plain variable outside the reactive graph.
 - `solid-js/html` drops the static whitespace between an element and the expression that follows it, so `<b>${n}</b> ${word}` renders as `1expense`; the space has to be part of the interpolated string.
@@ -75,16 +71,15 @@ _Reference context — observed facts and standing conventions for this project,
 - `@playwright/test` in `package.json` is pinned exact to the nixpkgs `playwright-driver` version, 1.59.1 as of July 2026.
 - A Playwright release and a Chromium build number are a matched pair; when the npm version and the Nix browser set disagree, every test fails at launch with "Executable doesn't exist" naming a build absent from the store path.
 - A nixpkgs bump that moves `playwright-driver` re-breaks the suite until `@playwright/test` is re-pinned to match; `nix-instantiate --eval -E 'with import <nixpkgs> {}; playwright-driver.version'` reads the version to pin to.
-- `@capacitor/core`'s `dist/index.js` is one self-contained ES module with no `import` statements, so it drops into the import map and the three copy lists exactly as Solid's files do.
 - `window.Capacitor.Plugins.X` proxies are built by `@capacitor/core`'s `registerPlugin`, not by the injected `native-bridge.js`; the injected bridge supplies only `toNative`, `nativePromise` and `nativeCallback`.
 - Importing `@capacitor/core` assigns `window.Capacitor` on every platform, so `Capacitor.isNativePlatform()` is an imported binding: no `window.` prefix and no optional chaining, unlike the `window.Android` test it replaced.
 - Capacitor's `getPlatformId` calls the platform "android" purely because `window.androidBridge` exists; nothing else is consulted.
 - A `registerPlugin` proxy reaches native code only when `Capacitor.PluginHeaders` names that plugin and method; `JSExport.java` injects the headers. Without a header and without a JS implementation the call throws "not implemented".
 - ESLint and Prettier ignore `.cache/`. Why: the Gradle home there unpacks Capacitor's own `native-bridge.js`, which alone fails the lint with 83 errors.
 - targetSdk 36 forces edge-to-edge display, so the app draws under the status and navigation bars, and every edge in the CSS carries its own spacing plus the bar's inset.
-- Capacitor 8 registers a built-in `SystemBars` plugin, with no package to install, which sets `--safe-area-inset-top/right/bottom/left` on the document element from the window insets.
-- `SystemBars` lets the insets reach the page only when the viewport meta carries `viewport-fit=cover` and the WebView is version 140 or later; otherwise it pads the WebView's parent view and the page never draws under the bars.
-- `env(safe-area-inset-*)` reports wrong figures on Android WebView before version 140 (Chromium issue 40699457), which is why `SystemBars` injects the CSS variables at all.
+- Capacitor's `SystemBars` plugin lets the window insets reach the page only when the viewport meta carries `viewport-fit=cover` and the WebView is version 140 or later.
+- Where `SystemBars` withholds the insets it pads the WebView's parent view instead, so the page never draws under the system bars.
+- Chromium issue 40699457 is the wrong `env(safe-area-inset-*)` reporting on Android WebView before version 140, and the reason Capacitor injects `--safe-area-inset-*` instead.
 
 ## Decisions
 
@@ -113,43 +108,37 @@ _Reference context — observed facts and standing conventions for this project,
 - Chrome's blue tap highlight is suppressed app-wide and replaced by `:active` rules that darken the pressed surface one step in the palette. Why: nothing else in the design acknowledges a press.
 - Only controls whose tap leads elsewhere carry a pressed style; the category chips and the month total have none, since a tap changes how they are drawn and the extra step was felt as a stutter.
 - The app is zero-build — Solid's `html` tagged template plus an import map, no esbuild or Vite. Why: `just build-web` stays copy-only and `just serve` iteration is instant.
-- Unit tests run in Node against functions exported from `main.js`, with no jsdom and no test framework. Why: all four Solid entry points import headless, so the domain layer needs only stubbed `localStorage` and `alert`.
+- Unit tests run in Node against functions exported from `main.js`, with no jsdom and no test framework. Why: the Solid entry points and `@capacitor/core` all import headless, so the domain layer needs only stubbed `localStorage` and `alert`.
 - The add/edit sheet and the import path share one `expenseError` check, and the form's wording won: a blank imported description reports "Description cannot be empty."
 - An expense with no `categories` field loads as one with none. Why: earlier versions blanked the app at startup on such data.
 - Day headings call `formatDay(date, reference)`, which answers "Today", "Yesterday" or the day and month, while `toIsoDate` stays the storage format. Why: a heading is free to diverge from the way a date is stored.
 - Fraunces and DM Sans load from Google Fonts at runtime, so a device with no network falls back to a system serif and sans. Why: self-hosting them would make `just build-web` copy font files.
-- The Playwright suite serves the app from its own `web/e2e/server.js` rather than `just serve`. Why: `just serve` publishes the *built* assets, which would make the UI suite depend on a full Android build.
+- The Playwright suite serves the app from its own `web/e2e/server.js` rather than `just serve`. Why: `just serve` publishes the *built* assets in `build/web/dist`, which would make the UI suite depend on a build step.
 - `web/e2e/server.js` maps the app's URL names straight onto `web/` and `node_modules`, so the UI suite needs no build step and exercises `index.html` unchanged.
 - The Playwright suite runs one Chromium project, `phone`, with `timezoneId` pinned to Asia/Kolkata. Why: an unpinned zone makes dated tests follow the machine, while varying the zone belongs at the unit level, where it is cheaper and explicit.
 - Timezone coverage lives in `web/test/timezone.test.js`: five zones (UTC, Kolkata, New York, Kiritimati, Niue) crossed with four instants, over three end-to-end date properties. The rest of `just test` runs once, with `TZ` pinned.
 - `web/test/timezone.test.js` fixes the clock as well as the zone. Why: a UTC slip shows just after midnight or late in the evening, which are rarely the hours a suite is run at, so the old `TZ=... node --test` loop reached them only by luck.
 - Measured before the doubled runs were dropped: a `toIsoDate` UTC defect failed only 2 of 99 tests in the weaker of the two zones, where `timezone.test.js` fails 24 running in UTC alone. Why it matters: the loop's margin was thin, not generous.
 - Expectations about "today" in the UI suite are computed in the page, not in Node. Why: only the browser context carries the project's pinned timezone.
-- The Android bridge is exercised in the browser against a recording stand-in installed before load, not on a device. Why: it pins the JavaScript side of the contract, which is what a UI change can break.
-- The bridge contract the UI suite pins is `Android.createFile(filename, json)` and `Android.pickFile(callback)`.
-- The stand-in bridge in the UI suite leaves the Java side of `MainActivity` untested; that still needs an emulator run.
+- The native side is exercised in the browser against a recording stand-in installed before load, not on a device. Why: it pins the JavaScript side of the contract, which is what a UI change can break.
+- The native contract the UI suite pins is `Filesystem.writeFile` to the cache directory followed by `Share.share` of the returned `uri`.
+- The stand-in leaves everything the system does with the shared file, the file picker and the display cutout untested; that still needs a device.
 - Every development command lives in the `justfile`, run inside `nix-shell`, the boundary entered once per terminal. Why: `just` gives variadic argument passthrough and `--list` help, and hides npm, gradle and adb behind recipe names.
 - `scripts/` holds only `emulator` after the five bash scripts were absorbed into `just` recipes. Why: it is Python and too large to inline in a recipe.
 - `just build` splits into `build-web` and `build-android`, and `serve` depends only on `build-web`. Why: serving the app then needs no Gradle run, so it refreshes the assets itself and never shows stale ones.
 - `just install` checks for an attached device before building, so it calls `just build` inside the recipe instead of declaring it a dependency. Why: a missing device then costs a second rather than a minute.
 - Linting is ESLint (flat config, recommended rules) plus Prettier, chosen over Biome and oxlint. Why: Prettier's defaults already matched the hand-written style, so the one-off reformat of `web/` changed only 135 lines across 12 files.
 - Linting is on demand through `just lint`; no build or test recipe runs it. Why: the user asked for a recipe, not a gate.
-- `web/.prettierrc` writes out 2-space indentation, no tabs and an 80-column width although all three are Prettier's defaults. Why: a Prettier upgrade then cannot move them silently.
-- Moneta is being ported to Capacitor to stop maintaining the hand-written Java bridge; the back-button listener the port enables is a separate change after it lands.
-- The port accepts losing every installed copy's `localStorage`, because `file://` and `http://localhost` are different origins. Why: only the author uses the app.
-- Export under Capacitor becomes `Filesystem.writeFile` to the cache directory plus a Share sheet. Why: Capacitor offers no system Save-As dialog.
-- Import under Capacitor drops its native branch, since Capacitor's WebView implements `onShowFileChooser` and the existing `<input type=file>` path should reach the system picker.
+- `.prettierrc` at the repository root writes out 2-space indentation, no tabs and an 80-column width although all three are Prettier's defaults. Why: a Prettier upgrade then cannot move them silently.
+- Moneta was ported to Capacitor to stop maintaining the hand-written Java bridge; the back-button listener the port enables is a separate change, not yet made.
+- The port accepted losing every installed copy's `localStorage`, because `file://` and `http://localhost` are different origins. Why: only the author uses the app.
 - The UI suite's native stand-in imitates what the WebView injects — `window.androidBridge`, `Capacitor.PluginHeaders` and `nativePromise` — rather than the app's plugin objects. Why: the plugin proxies then come from Capacitor's own code.
-- The browser reaches Capacitor plugins through `registerPlugin("Filesystem")` from `@capacitor/core` alone; the plugin npm packages stay in `node_modules` only so `cap sync` compiles their Java.
-- The npm project sits at the repository root so the Capacitor layout is the stock one: `webDir` is the plain subpath `build/web/dist` and `android/` needs no `android.path` override.
 - The Gradle wrapper that `cap add android` generates is deleted, so the `gradle` pinned by `shell.nix` builds the app, run inside `android/`. Why: one Gradle version, as before the port. Cost: `npx cap run android` cannot be used.
-- Safe-area spacing reads `var(--safe-area-inset-top, env(safe-area-inset-top))`. Why: the variable is authoritative inside Capacitor, and a plain browser, where nothing sets it, falls back to `env()`.
 - `web/e2e/safe-area.spec.js` proves the safe-area CSS by setting the `--safe-area-inset-*` variables by hand and reading the computed spacing. Why: no browser here has a cutout, and only the figures, not the wiring, need a device.
-- The Capacitor port keeps the app zero-build: `webDir` points at `build/web/dist` and `npx cap sync` replaces `build-web`'s copy into the Android assets, so no bundler enters.
 
 ## Dead Ends
 
-- ✗ Back-button dismissal for the dialog and settings was abandoned: it needs a Java `onBackPressed` bridge calling into the page, and still leaves plain-browser use with no way to close either.
+- ✗ Back-button dismissal for the dialog and settings was abandoned before the Capacitor port, when it needed a Java `onBackPressed` bridge. Capacitor's `App` plugin makes it cheap, but plain-browser use still has no way to close either.
 - ✗ Assigning each category a random colour from the least-used tones was abandoned: it guarantees distinct colours but requires storing the assignments, cleaning them up when a category disappears, and reassigning on import.
 - ✗ Visual directions explored and rejected for this app: greenbar ledger, thermal till roll, coin/ring, dark instrument gauge, and a neo-brutalist bar-chart list.
 - ✗ A `prefers-reduced-motion` rule setting `transition: none` on the sheet was rejected: `Transition` unmounts on `transitionend`, which never fires without a transition. Honouring it needs an `onExit(el, done)` hook.
@@ -166,5 +155,4 @@ _Reference context — observed facts and standing conventions for this project,
 - ? Whether the sheet's `+ new` chip should become a typeahead that filters the offered chips is undecided; it is the only option weighed that scales past a scrolling line, and costs a filtered memo plus new tests.
 - ? No screen totals a category across months; the header chips are per-month only.
 - ? Whether expense ids should stop being raw creation timestamps is undecided. A collision-free scheme has to preserve same-day sort order, which currently relies on ids increasing with creation time.
-- ? The Android bridge paths (`Android.createFile`, `Android.pickFile`) have never been exercised on a device; only the browser branches are tested. They need an emulator run.
-- ? Whether Capacitor's WebView opens the system file picker for `<input type=file>`, and whether the Share-sheet export behaves, is unverified; both need an emulator run.
+- ? Whether Capacitor's WebView opens the system file picker for `<input type=file>`, whether the Share-sheet export yields a usable file, and whether the safe-area padding lands correctly are all unverified; each needs a device.

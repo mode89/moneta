@@ -556,8 +556,7 @@ export function deleteMessage(expense) {
 }
 
 export function importMessage(review, current) {
-  const source = review.filename ?? "This file";
-  const holds = `${source} holds ${plural(review.count, "expense")}.`;
+  const holds = `${review.filename} holds ${plural(review.count, "expense")}.`;
   if (current === 0)
     return `${holds} Importing replaces everything on this device and cannot be undone.`;
   return `${holds} Importing removes the ${plural(current, "expense")} on this device and cannot be undone.`;
