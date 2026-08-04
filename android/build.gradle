@@ -1,13 +1,13 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 32
-    buildToolsVersion "33.0.2"
+    compileSdkVersion 36
+    buildToolsVersion "36.0.0"
     defaultConfig {
         applicationId "net.akrain.moneta"
         namespace "net.akrain.moneta"
         minSdkVersion 28
-        targetSdkVersion 32
+        targetSdkVersion 36
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner \
@@ -22,7 +22,7 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
     }
 }

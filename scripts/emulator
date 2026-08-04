@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 AVD_NAME = "moneta"
-SDK_PACKAGE = "system-images;android-32;google_apis;x86_64"
+SDK_PACKAGE = "system-images;android-36;google_apis;x86_64"
 
 def main():
     """Main function."""

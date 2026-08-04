@@ -52,7 +52,7 @@ _Reference context — observed facts and standing conventions for this project,
 - Dropping one of two Playwright projects does not halve the wall clock: 344 tests across both zones ran in 34.5s, 172 in one zone in 46.7s, because the worker pool fills either way.
 - `just` has no file-timestamp dependency tracking, so `npm install` runs on every `test`, `test-browser` and `build-web` through the shared `deps` recipe, adding about 0.4s.
 - A `just` recipe runs each line in a separate shell unless it starts with a `#!/usr/bin/env bash` shebang, so a multi-line recipe carrying variables needs one.
-- Gradle in this sandbox fails at `:android:validateSigningDebug` with `?` in place of `$HOME` in the keystore path, and leaves a stray `?/` directory at the project root. Plain `gradle build` fails the same way, so it is not a build defect.
+- `just build` packages the APK here; the `:android:validateSigningDebug` failure with `?` for `$HOME`, recorded earlier as a sandbox landmine, did not recur under SDK 36, Gradle 8.14.4 and JDK 21.
 - `web/index.html` loads Fraunces and DM Sans from Google Fonts, so anything that opens the page waits on the public internet for the `load` event: `just serve`, a throwaway script, and the UI suite alike.
 - An external stall in the UI suite shows up as `page.goto` timing out, on a different spec each time; it struck 1 run in 10 until `fixtures.js` began answering the Google Fonts request itself.
 - A process started with `&` inside `nix-shell --run` holds the output pipe open, so the command never returns even once that process is killed. Redirecting the child's output to `/dev/null` releases it.
@@ -69,6 +69,9 @@ _Reference context — observed facts and standing conventions for this project,
 - `@playwright/test` in `web/package.json` is pinned exact to the nixpkgs `playwright-driver` version, 1.59.1 as of July 2026.
 - A Playwright release and a Chromium build number are a matched pair; when the npm version and the Nix browser set disagree, every test fails at launch with "Executable doesn't exist" naming a build absent from the store path.
 - A nixpkgs bump that moves `playwright-driver` re-breaks the suite until `@playwright/test` is re-pinned to match; `nix-instantiate --eval -E 'with import <nixpkgs> {}; playwright-driver.version'` reads the version to pin to.
+- `@capacitor/core`'s `dist/index.js` is one self-contained ES module with no `import` statements, so it drops into the import map and the three copy lists exactly as Solid's files do.
+- `window.Capacitor.Plugins.X` proxies are built by `@capacitor/core`'s `registerPlugin`, not by the injected `native-bridge.js`; the injected bridge supplies only `toNative`, `nativePromise` and `nativeCallback`.
+- targetSdk 36 forces edge-to-edge display, so the app draws under the status and navigation bars; the agreed fix is `viewport-fit=cover` plus `env(safe-area-inset-*)` padding on the header and the sheet.
 
 ## Decisions
 
@@ -119,6 +122,12 @@ _Reference context — observed facts and standing conventions for this project,
 - Linting is ESLint (flat config, recommended rules) plus Prettier, chosen over Biome and oxlint. Why: Prettier's defaults already matched the hand-written style, so the one-off reformat of `web/` changed only 135 lines across 12 files.
 - Linting is on demand through `just lint`; no build or test recipe runs it. Why: the user asked for a recipe, not a gate.
 - `web/.prettierrc` writes out 2-space indentation, no tabs and an 80-column width although all three are Prettier's defaults. Why: a Prettier upgrade then cannot move them silently.
+- Moneta is being ported to Capacitor to stop maintaining the hand-written Java bridge; the back-button listener the port enables is a separate change after it lands.
+- The port accepts losing every installed copy's `localStorage`, because `file://` and `http://localhost` are different origins. Why: only the author uses the app.
+- Export under Capacitor becomes `Filesystem.writeFile` to the cache directory plus a Share sheet. Why: Capacitor offers no system Save-As dialog.
+- Import under Capacitor drops its native branch, since Capacitor's WebView implements `onShowFileChooser` and the existing `<input type=file>` path should reach the system picker.
+- The browser reaches Capacitor plugins through `registerPlugin("Filesystem")` from `@capacitor/core` alone; the plugin npm packages stay in `node_modules` only so `cap sync` compiles their Java.
+- The Capacitor port keeps the app zero-build: `webDir` points at `build/web/dist` and `npx cap sync` replaces `build-web`'s copy into the Android assets, so no bundler enters.
 
 ## Dead Ends
 
@@ -131,6 +140,7 @@ _Reference context — observed facts and standing conventions for this project,
 - ✗ A Makefile and a `./dev` dispatcher script were both rejected as the development front door: Make passes arguments only as `ARGS=`, and the dispatcher earned its keep only by hiding `nix-shell`, which is entered anyway.
 - ✗ Leaving Prettier's `embeddedLanguageFormatting` on was abandoned: it reads the `html` tagged templates as HTML and re-indents the Solid markup, changing 369 lines of `main.js` against 28 with it off.
 - ✗ Moving `shell.nix` to a flake with `nix run .#…` apps was weighed and dropped: it types longer rather than shorter, and re-opens the `playwright-driver` version pinning.
+- ✗ Loading the Capacitor plugin packages' own JavaScript in the browser was rejected: their `dist/esm/index.js` uses bare and extension-less relative imports, and `dist/plugin.js` is an IIFE needing a `capacitorExports` global.
 
 ## Open Questions
 
@@ -139,4 +149,4 @@ _Reference context — observed facts and standing conventions for this project,
 - ? No screen totals a category across months; the header chips are per-month only.
 - ? Whether expense ids should stop being raw creation timestamps is undecided. A collision-free scheme has to preserve same-day sort order, which currently relies on ids increasing with creation time.
 - ? The Android bridge paths (`Android.createFile`, `Android.pickFile`) have never been exercised on a device; only the browser branches are tested. They need an emulator run.
-- ? The Gradle packaging step is unverified: `just build-android` has never completed here, since this sandbox breaks it at `:android:validateSigningDebug`.
+- ? Whether Capacitor's WebView opens the system file picker for `<input type=file>`, and whether the Share-sheet export behaves, is unverified; both need an emulator run.

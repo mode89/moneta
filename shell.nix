@@ -8,9 +8,9 @@
 }:
 
 let
-  buildToolsVersion = "33.0.2";
+  buildToolsVersion = "36.0.0";
   androidsdk = (pkgs.androidenv.composeAndroidPackages {
-    platformVersions = [ "32" ];
+    platformVersions = [ "36" ];
     buildToolsVersions = [ buildToolsVersion ];
     abiVersions = [ "x86_64" ];
     includeEmulator = true;
@@ -19,9 +19,7 @@ let
 in pkgs.mkShell {
   packages = with pkgs; [
     androidsdk
-    (gradle_8.override {
-      java = pkgs.jdk17;
-    })
+    gradle_8
     nodejs
     just
   ];
