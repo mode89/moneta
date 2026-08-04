@@ -9,6 +9,16 @@ from pathlib import Path
 AVD_NAME = "moneta"
 SDK_PACKAGE = "system-images;android-36;google_apis;x86_64"
 
+AVD_SETTINGS = {
+    "hw.keyboard": "yes",
+    "hw.gpu.enabled": "yes",
+    "hw.gpu.mode": "host",
+    "vm.heapSize": "256M",
+}
+
+# SwiftShader renders on the host processor when the host driver is unreachable.
+GPU_MODES = ["host", "swiftshader_indirect"]
+
 def main():
     """Main function."""
     # Check if AVD exists, create if not
@@ -19,8 +29,7 @@ def main():
     else:
         print(f"AVD '{AVD_NAME}' already exists.")
 
-    # Enable hardware keyboard
-    enable_hardware_keyboard(AVD_NAME)
+    configure_avd(AVD_NAME, AVD_SETTINGS)
 
     # Start emulator
     start_emulator(AVD_NAME)
@@ -54,8 +63,8 @@ def create_avd(avd_name, sdk_package):
     result = run_command(cmd, input_text="no\n", capture_output=False)
     return result and result.returncode == 0
 
-def enable_hardware_keyboard(avd_name):
-    """Enable hardware keyboard for the AVD."""
+def configure_avd(avd_name, settings):
+    """Apply the settings to the AVD config, keeping what is already right."""
     avd_home = Path(
         os.environ.get("ANDROID_AVD_HOME", Path.home() / ".android" / "avd"))
     config_file = avd_home / f"{avd_name}.avd" / "config.ini"
@@ -64,38 +73,36 @@ def enable_hardware_keyboard(avd_name):
         print(f"Warning: AVD config file not found at {config_file}")
         return False
 
-    # Read current config
     with open(config_file, "r") as f:
         content = f.read()
 
-    changed = False
-    if re.search(r"hw\.keyboard\s*=\s*yes", content):
-        print(f"hw.keyboard already enabled in {config_file}")
+    updated = content
+    for key, value in settings.items():
+        pattern = rf"^{re.escape(key)}\s*=\s*.*$"
+        if re.search(pattern, updated, flags=re.MULTILINE):
+            updated = re.sub(
+                pattern, f"{key}={value}", updated, flags=re.MULTILINE)
+        else:
+            updated += f"\n{key}={value}\n"
+
+    if updated == content:
         return True
 
-    # Use re.sub to find and replace existing hw.keyboard entries
-    # or append if not found.
-    if re.search(r"hw\.keyboard\s*=\s*.*", content):
-        content = re.sub(
-            r"hw\.keyboard\s*=\s*.*", "hw.keyboard = yes", content)
-        changed = True
-    else:
-        content += "\nhw.keyboard = yes\n"
-        changed = True
-
-    if changed:
-        print(f"Updating hw.keyboard setting in {config_file}")
-        with open(config_file, "w") as f:
-            f.write(content)
-        return True
-    return False
+    print(f"Updating settings in {config_file}")
+    with open(config_file, "w") as f:
+        f.write(updated)
+    return True
 
 def start_emulator(avd_name):
-    """Start the emulator."""
-    print(f"Starting emulator: {avd_name}")
-    cmd = f"emulator -avd \"{avd_name}\""
-    result = run_command(cmd, capture_output=False)
-    return result and result.returncode == 0
+    """Start the emulator, falling back through the GPU modes."""
+    for gpu_mode in GPU_MODES:
+        print(f"Starting emulator: {avd_name} (-gpu {gpu_mode})")
+        cmd = f"emulator -avd \"{avd_name}\" -gpu {gpu_mode}"
+        result = run_command(cmd, capture_output=False)
+        if result and result.returncode == 0:
+            return True
+        print(f"Emulator failed with -gpu {gpu_mode}")
+    return False
 
 if __name__ == "__main__":
     main()
