@@ -65,6 +65,16 @@ test.describe("the settings screen", () => {
     await expect(app.totalSpent).toHaveText("$12.50");
   });
 
+  test("closes with animations turned off", async ({ app }) => {
+    await app.disableAnimations();
+    await app.openSettings();
+
+    await app.closeSettings();
+
+    await expect(app.settings).toHaveCount(0);
+    await expect(app.expenseItem("Groceries")).toBeVisible();
+  });
+
   test("saves nothing by being opened", async ({ app }) => {
     await app.openSettings();
     await app.closeSettings();

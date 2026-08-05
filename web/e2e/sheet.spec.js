@@ -84,6 +84,16 @@ test.describe("the expense sheet", () => {
     await expect(app.scrim).toHaveCount(0);
   });
 
+  test("closes with animations turned off", async ({ app }) => {
+    await app.disableAnimations();
+    await app.openNewExpense();
+
+    await app.dismissDialog();
+
+    await expect(app.sheet).toHaveCount(0);
+    await expect(app.scrim).toHaveCount(0);
+  });
+
   test("ignores Escape, which a phone does not send", async ({ app, page }) => {
     await app.openNewExpense();
 

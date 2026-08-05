@@ -189,6 +189,14 @@ export class MonetaApp {
     await expect(this.header).toBeVisible();
   }
 
+  // Stands in for a device with animations turned off, where no transition
+  // runs and so no `transitionend` is ever fired.
+  async disableAnimations() {
+    await this.page.addStyleTag({
+      content: "*, *::before, *::after { transition: none !important; }",
+    });
+  }
+
   // --- reading the page -----------------------------------------------
 
   dayHeading(label) {

@@ -50,7 +50,12 @@ function App() {
       <${CategoryLegend} />
       <div class="scroll"><${ExpenseList} /></div>
       <${NewExpenseButton} />
-      <${Transition} name="sheet" mode="outin">
+      <${Transition}
+        name="sheet"
+        mode="outin"
+        onEnter=${settleTransition}
+        onExit=${settleTransition}
+      >
         ${() => {
           const edited = editedExpense();
           if (edited === null) return null;
@@ -87,7 +92,12 @@ function App() {
           }}
         />`;
       }}
-      <${Transition} name="cover" mode="outin">
+      <${Transition}
+        name="cover"
+        mode="outin"
+        onEnter=${settleTransition}
+        onExit=${settleTransition}
+      >
         ${() => (settingsOpen() ? html`<${SettingsScreen} />` : null)}
       <//>
       ${() => {
@@ -895,6 +905,30 @@ export function plural(count, noun) {
 export function expenseNoun(count) {
   return count === 1 ? "expense" : "expenses";
 }
+
+// An overlay's transition counts as over once it has been drawn. Transition's
+// own default waits for transitionend alone, which never arrives when no
+// transition runs — with animations turned off, or when a stalled main thread
+// collapses the change into one frame — leaving the overlay on screen for ever
+// on the way out and its enter class stuck on the way in. The wait is read from
+// the element, so the duration stays written only in the CSS. Taking two
+// parameters is what stops Transition adding its own listener.
+function settleTransition(element, done) {
+  const style = getComputedStyle(element);
+  const seconds =
+    parseFloat(style.transitionDuration) + parseFloat(style.transitionDelay);
+
+  const finish = (event) => {
+    if (event && event.target !== element) return;
+    clearTimeout(timer);
+    element.removeEventListener("transitionend", finish);
+    done();
+  };
+  const timer = setTimeout(finish, seconds * 1000 + TRANSITION_SLACK_MS);
+  element.addEventListener("transitionend", finish);
+}
+
+const TRANSITION_SLACK_MS = 50;
 
 function appVersion() {
   return document.querySelector('meta[name="version"]')?.content ?? "unknown";

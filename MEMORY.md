@@ -21,6 +21,7 @@ _Reference context — observed facts and standing conventions for this project,
 - `MonetaApp` helpers that describe rendered content expose a locator, not an awaited snapshot. Why: `expect(await …).toEqual(…)` compares plain values and never retries, so it reads the DOM mid-render.
 - Lists rendered by the app are asserted with `expect(locator).toHaveText([...])`, which retries on both the element count and the texts.
 - A change to the UI suite's timing is judged by running the whole suite ~50 times, not once. Why: the one flake found this way struck 2 runs in 50, which ten runs had called clean.
+- `app.disableAnimations()` in `web/e2e/fixtures.js` injects `transition: none` to stand in for a device with animations off; `sheet.spec.js` and `settings.spec.js` use it to prove the overlay still closes.
 - Anything that must exist before `main()` runs — seeded expenses, a fixed clock, the Capacitor bridge — is installed by `app.open()` in `web/e2e/fixtures.js`.
 - A UI test that seeds dated expenses also fixes the clock with `open({ now })`. Why: an expense outside the current month renders as a fold line, not a row, so a real clock silently empties the list. How to apply: any spec with seeded dates.
 - A new development command is added as a subcommand of `scripts/dev` rather than a new file in `scripts/`. Why: the list `scripts/dev` prints comes from those functions, so it cannot drift. How to apply: any build, test, serve or device task.
@@ -37,6 +38,9 @@ _Reference context — observed facts and standing conventions for this project,
 - `main.js` names the App plugin proxy `AppPlugin`, since `App` is already the root Solid component.
 - A `registerPlugin` proxy's `addListener` reaches native through `nativeCallback`, not `nativePromise`, and needs an `addListener` method of rtype `callback` in that plugin's `PluginHeaders`.
 - A category is one lowercase word, since `parseCategories` splits on whitespace. The chip-style category input therefore commits on space, and two-word names are impossible without a storage-format change.
+- An overlay whose CSS transition never runs stayed in the DOM for ever before `settleTransition`: `solid-transition-group` removes the element on `transitionend` alone, and both animations turned off and a stalled main thread suppress that event.
+- `solid-transition-group` adds its own `transitionend` listener only when the `onEnter`/`onExit` hook takes fewer than two parameters, so a hook of arity 2 owns completion and must call `done` itself.
+- The intermittent `back-button.spec.js` failure, about 1 full suite run in 4, was that overlay defect under parallel load rather than a test race; 50 consecutive runs pass since `settleTransition`.
 - In `solid-js/html`, reading a signal inside the expression that renders an `<input>` rebuilds that input on every keystroke and loses what was typed. Draft text has to live in a plain variable outside the reactive graph.
 - `solid-js/html` drops the static whitespace between an element and the expression that follows it, so `<b>${n}</b> ${word}` renders as `1expense`; the space has to be part of the interpolated string.
 - A CSS `gap` on a flex line hides missing text spacing: the page looks right while the DOM text runs the words together, which is what a screen reader and a copy-paste get.
@@ -114,6 +118,8 @@ _Reference context — observed facts and standing conventions for this project,
 - The header shows month, total, expense count and average per day, with no eyebrow label above the month. Why: a label restates the month line and only carries information while filtering.
 - Settings sits behind a gear top-right and closes with a ✕ in the same corner, holding only Export, Import and the version.
 - Sheet animation uses `solid-transition-group`'s `<Transition>`, not a hand-rolled `setTimeout` before unmount. Why: it is the package the Solid project publishes for this, and the duration then lives only in CSS.
+- The sheet and the settings cover pass `settleTransition` as both `onEnter` and `onExit`. Why: it ends a transition on `transitionend` or after the element's own duration, so an overlay still closes where no transition runs.
+- `settleTransition` reads its wait from `getComputedStyle`, not from a constant. Why: the 170ms and 190ms stay written only in the CSS, as choosing `<Transition>` was meant to keep them.
 - `<Transition>` runs in `mode="outin"`, so a reopened sheet waits for the leaving one. Why: simultaneous mode put two `.sheet` elements in the page at once and broke every locator that assumes one.
 - The settings screen slides in from the right and back out over 190ms, through the same `<Transition>` the sheet uses. Why: horizontal motion reads as a screen beside the app, where the sheet's rise reads as a panel over it.
 - A dim sits behind the settings screen and fades with its travel, but is seen only while it moves, since the screen is opaque and covers the app at rest.
@@ -165,7 +171,7 @@ _Reference context — observed facts and standing conventions for this project,
 
 - ✗ Assigning each category a random colour from the least-used tones was abandoned: it guarantees distinct colours but requires storing the assignments, cleaning them up when a category disappears, and reassigning on import.
 - ✗ Visual directions explored and rejected for this app: greenbar ledger, thermal till roll, coin/ring, dark instrument gauge, and a neo-brutalist bar-chart list.
-- ✗ A `prefers-reduced-motion` rule setting `transition: none` on the sheet was rejected: `Transition` unmounts on `transitionend`, which never fires without a transition. Honouring it needs an `onExit(el, done)` hook.
+- ✗ A `prefers-reduced-motion` rule setting `transition: none` on the sheet was once rejected because `Transition` unmounts on `transitionend`, which never fires without a transition. `settleTransition` has since removed that blocker.
 - ✗ Making settings a side panel over a permanently dimmed strip of the app was weighed and refused: it stops covering the app, which `web/e2e/settings.spec.js` asserts, and re-opens the back-button behaviour.
 - ✗ A "Discard this expense?" confirmation on closing the add/edit dialog was designed and then dropped as noise for what is usually an empty form.
 - ✗ direnv with `scripts/` on `PATH` as the command front door was rejected: direnv is not used here, and `test` and `install` collide with a shell builtin and a coreutils binary.
@@ -184,3 +190,4 @@ _Reference context — observed facts and standing conventions for this project,
 - ? Whether the safe-area padding lands at the right size is unverified; `maestro/safe-area.yaml` shows only that the edge controls are reachable, and the screenshot needs a human eye.
 - ? Whether the shared export file is usable in a receiving app is unverified; the Maestro flow stops at the chooser, which reports "Sharing 1 file" and the `moneta-YYYY-MM-DD.json` name.
 - ? Why the first `scripts/dev test-android` run after the port exited 1 is unexplained; the two runs after it passed, so it is untriaged flakiness rather than a known defect.
+- ? Whether to add a `prefers-reduced-motion` rule is undecided; `settleTransition` removed the blocker, since a transition of `0s` now completes at once.
