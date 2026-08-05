@@ -2,7 +2,7 @@
 # <input type="file"> with the system file picker. Only a device can show that
 # the picker opens, hands a file back and that the file reaches the app.
 #
-# `just test-android` writes /sdcard/Download/moneta-import.json first, one
+# `scripts/dev test-android` writes /sdcard/Download/moneta-import.json first, one
 # expense of $42.50 named "Imported lunch", dated today so it lands in the
 # open month.
 appId: net.akrain.moneta

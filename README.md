@@ -18,19 +18,21 @@ straightforward way to manage personal finances on the go.
 
 # Development
 
-All development commands live in the `justfile` and run inside the Nix shell,
-which pins the Android SDK, Gradle, Node.js and `just`:
+All development commands live in `scripts/dev` and run inside the Nix shell,
+which pins the Android SDK, Gradle and Node.js:
 
 ```
 $ nix-shell
-$ just
+$ scripts/dev
 ```
 
-`just` on its own lists the recipes:
+`scripts/dev` on its own lists the commands:
 
-* `just test` — unit tests.
-* `just test-browser [args]` — Playwright UI suite; arguments go to Playwright.
-* `just serve` — serve the web app on port 8080.
-* `just emulator` — create the `moneta` AVD if missing and start it.
-* `just build` — build the web assets and the APK.
-* `just install` — build and install the debug APK on the attached device.
+* `scripts/dev test` — unit tests.
+* `scripts/dev test-browser [args]` — Playwright UI suite; arguments go to
+  Playwright.
+* `scripts/dev serve` — serve the web app on port 8080.
+* `scripts/dev emulator` — create the `moneta` AVD if missing and start it.
+* `scripts/dev build` — build the web assets and the APK.
+* `scripts/dev install` — build and install the debug APK on the attached
+  device.

@@ -1,0 +1,352 @@
+#!/usr/bin/env python3
+"""Development commands for Moneta. Run without arguments to list them."""
+
+import contextlib
+import inspect
+import json
+import os
+import re
+import shutil
+import socket
+import subprocess
+import sys
+import time
+from datetime import date
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+APK = "android/app/build/outputs/apk/debug/app-debug.apk"
+MDI_DIR = "node_modules/@material-design-icons/svg/outlined"
+ADB_PORT = 5037
+
+COMMANDS = {}
+
+def main(argv):
+    os.chdir(ROOT)
+    # Unbuffered, so this script's own lines stay in order with the output of
+    # the commands it runs when both are piped.
+    sys.stdout.reconfigure(line_buffering=True)
+    if not argv or argv[0] in ("-h", "--help"):
+        list_commands(sys.stdout)
+        return 0
+
+    name, args = argv[0], argv[1:]
+    if name not in COMMANDS:
+        print(f"Unknown command: {name}\n", file=sys.stderr)
+        list_commands(sys.stderr)
+        return 2
+    if args and not takes_arguments(COMMANDS[name]):
+        print(f"'{name}' takes no arguments.", file=sys.stderr)
+        return 2
+
+    try:
+        COMMANDS[name](*args)
+    except subprocess.CalledProcessError as error:
+        return error.returncode or 1
+    return 0
+
+def command(function):
+    """Register a function as a command, named after it."""
+    COMMANDS[function.__name__.replace("_", "-")] = function
+    return function
+
+# ---------------------------------------------------------------- commands
+
+@command
+def test():
+    """Run the unit tests in web/test/."""
+    deps()
+    # The zone is pinned so results do not follow the machine;
+    # test/timezone.test.js sets its own zones. A directory argument is read as
+    # a module path; only a glob selects the files.
+    run("node", "--test", "web/test/*.test.js", env={"TZ": "Asia/Kolkata"})
+
+@command
+def test_browser(*args):
+    """Run the Playwright UI suite in web/e2e/; takes Playwright's arguments."""
+    deps()
+    run("npx", "playwright", "test", *args)
+
+@command
+def test_android(*args):
+    """Run the Maestro flows in maestro/; takes a flow path."""
+    Path("build/maestro").mkdir(parents=True, exist_ok=True)
+    with own_adb_server():
+        started_emulator = False
+        try:
+            if not attached_devices():
+                print("No device attached. Starting a headless emulator.")
+                started_emulator = True
+                start_headless_emulator()
+            install()
+            banner("Running device flows")
+            seed_import_file()
+            run("maestro", "test", *(args or ("maestro",)))
+        finally:
+            if started_emulator:
+                quietly("adb", "emu", "kill")
+
+@command
+def lint():
+    """Check the JavaScript in web/ with ESLint and Prettier."""
+    deps()
+    run("npx", "eslint", ".")
+    run("npx", "prettier", "--check", ".")
+
+@command
+def format():
+    """Reformat the JavaScript in web/ with Prettier."""
+    deps()
+    run("npx", "prettier", "--write", ".")
+
+@command
+def serve():
+    """Serve the web app on port 8080 for browser-based iteration."""
+    build_web()
+    run(sys.executable, "-m", "http.server", "8080", cwd="build/web/dist")
+
+@command
+def emulator(*args):
+    """Create the moneta AVD if missing and start it; takes emulator options."""
+    with own_adb_server():
+        if avd_exists(AVD_NAME):
+            print(f"AVD '{AVD_NAME}' already exists.")
+        elif not create_avd(AVD_NAME, SDK_PACKAGE):
+            print("Failed to create AVD", file=sys.stderr)
+            raise SystemExit(1)
+        configure_avd(AVD_NAME, AVD_SETTINGS)
+        start_emulator(AVD_NAME, args)
+
+@command
+def build():
+    """Build the web assets and the Android APK."""
+    # The web assets come with it: build_android runs sync, which runs build_web.
+    build_android()
+
+@command
+def install():
+    """Install the debug APK on the attached device."""
+    # Checked before the build, so a missing device costs a second, not a minute.
+    if not attached_devices():
+        print("No device attached. Start one with 'scripts/dev emulator'.",
+              file=sys.stderr)
+        raise SystemExit(1)
+    build()
+    banner("Installing Android app")
+    run("adb", "install", "-r", APK)
+
+@command
+def build_web():
+    """Copy the web app and its dependencies into build/web/dist."""
+    deps()
+    banner("Building Web app")
+    dist = Path("build/web/dist")
+    shutil.rmtree("build/web", ignore_errors=True)
+    dist.mkdir(parents=True)
+
+    commit_date = capture("git", "log", "-1", "--format=%cd",
+                          "--date=format:%Y-%m-%d").strip()
+    commit = capture("git", "rev-parse", "--short", "HEAD").strip()
+    shell = Path("web/index.html").read_text()
+    (dist / "index.html").write_text(
+        shell.replace("%VERSION%", f"{commit_date}-{commit}"))
+
+    for source, name in WEB_ASSETS:
+        shutil.copy(source, dist / name)
+
+@command
+def build_android():
+    """Package the Android app around the copied web assets."""
+    sync()
+    banner("Building Android app")
+    aapt2 = os.environ.get("AAPT2")
+    if not aapt2:
+        print("AAPT2 is not set. Run this inside 'nix-shell'.", file=sys.stderr)
+        raise SystemExit(1)
+    # --no-daemon: the build leaves no background JVM behind, at the cost of a
+    # cold start on every run.
+    run("gradle", "--no-daemon",
+        f"-Dorg.gradle.project.android.aapt2FromMavenOverride={aapt2}", "build",
+        cwd="android")
+
+# ------------------------------------------------------------ build steps
+
+def sync():
+    """Copy the web app into the Android project and refresh its plugins."""
+    build_web()
+    banner("Syncing Capacitor")
+    run("npx", "cap", "sync", "android")
+
+def deps():
+    """Install the web dependencies."""
+    run("npm", "install")
+
+# ------------------------------------------------------------- web assets
+
+WEB_ASSETS = [
+    ("web/main.js", "main.js"),
+    ("node_modules/bootstrap/dist/css/bootstrap.css", "bootstrap.css"),
+    (f"{MDI_DIR}/file_download.svg", "file_download.svg"),
+    (f"{MDI_DIR}/file_upload.svg", "file_upload.svg"),
+    ("node_modules/solid-js/dist/solid.js", "solid.js"),
+    ("node_modules/solid-js/web/dist/web.js", "solid-web.js"),
+    ("node_modules/solid-js/store/dist/store.js", "solid-store.js"),
+    ("node_modules/solid-js/html/dist/html.js", "solid-html.js"),
+    ("node_modules/@capacitor/core/dist/index.js", "capacitor-core.js"),
+    ("node_modules/solid-transition-group/dist/index.js",
+     "solid-transition-group.js"),
+    ("node_modules/@solid-primitives/transition-group/dist/index.js",
+     "sp-transition-group.js"),
+    ("node_modules/@solid-primitives/refs/dist/index.js", "sp-refs.js"),
+    ("node_modules/@solid-primitives/utils/dist/index.js", "sp-utils.js"),
+    # sp-utils.js re-exports ./types.js, a relative import no import map covers.
+    ("node_modules/@solid-primitives/utils/dist/types.js", "types.js"),
+]
+
+# ----------------------------------------------------------------- device
+
+@contextlib.contextmanager
+def own_adb_server():
+    """Leave a running adb server alone; stop one that starts inside the block."""
+    # Probed before the first adb call, since any adb call starts a server, and
+    # so does the emulator.
+    started = not port_open(ADB_PORT)
+    try:
+        yield
+    finally:
+        if started:
+            quietly("adb", "kill-server")
+
+def attached_devices():
+    """The serial numbers adb reports as ready."""
+    rows = capture("adb", "devices").splitlines()[1:]
+    return [row.split()[0] for row in rows if row.split()[1:2] == ["device"]]
+
+def start_headless_emulator():
+    """Start an emulator with no window and wait for Android to finish booting."""
+    # The child keeps the output pipe of `nix-shell --run` open unless its
+    # output goes elsewhere, and the run then never returns.
+    # This child owns no adb server: `attached_devices` above has already
+    # started one, so its own probe finds the port open.
+    log = open("build/maestro/emulator.log", "w")
+    subprocess.Popen(
+        [sys.executable, __file__, "emulator",
+         "-no-window", "-no-audio", "-no-boot-anim"],
+        stdout=log, stderr=subprocess.STDOUT)
+    run("adb", "wait-for-device")
+    while capture("adb", "shell", "getprop", "sys.boot_completed").strip() != "1":
+        time.sleep(1)
+
+def seed_import_file():
+    """Put an import file dated today where maestro/import.yaml expects it."""
+    # Its date is today's, so the imported expense lands in the open month.
+    local = Path("build/maestro/moneta-import.json")
+    remote = "/sdcard/Download/moneta-import.json"
+    local.write_text(json.dumps([{
+        "id": 1,
+        "amount": 42.5,
+        "description": "Imported lunch",
+        "date": date.today().isoformat(),
+        "categories": ["food"],
+    }]))
+    run("adb", "push", local, remote)
+    # The picker lists a file only once the media store knows about it.
+    run("adb", "shell", "am", "broadcast",
+        "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE",
+        "-d", f"file://{remote}", stdout=subprocess.DEVNULL)
+
+# -------------------------------------------------------------------- AVD
+
+AVD_NAME = "moneta"
+SDK_PACKAGE = "system-images;android-36;google_apis;x86_64"
+
+AVD_SETTINGS = {
+    "hw.keyboard": "yes",
+    "hw.gpu.enabled": "yes",
+    "hw.gpu.mode": "host",
+    "vm.heapSize": "256M",
+}
+
+# SwiftShader renders on the host processor when the host driver is unreachable.
+GPU_MODES = ["host", "swiftshader_indirect"]
+
+def avd_exists(name):
+    listed = subprocess.run(["avdmanager", "list", "avd"],
+                            text=True, capture_output=True)
+    return listed.returncode == 0 and name in listed.stdout
+
+def create_avd(name, package):
+    print(f"Creating AVD: {name}")
+    created = subprocess.run(
+        ["avdmanager", "create", "avd", "--name", name, "--package", package],
+        input="no\n", text=True)
+    return created.returncode == 0
+
+def configure_avd(name, settings):
+    """Apply the settings to the AVD config, keeping what is already right."""
+    avd_home = Path(
+        os.environ.get("ANDROID_AVD_HOME", Path.home() / ".android" / "avd"))
+    config_file = avd_home / f"{name}.avd" / "config.ini"
+    if not config_file.exists():
+        print(f"Warning: AVD config file not found at {config_file}")
+        return
+
+    content = config_file.read_text()
+    updated = content
+    for key, value in settings.items():
+        pattern = rf"^{re.escape(key)}\s*=\s*.*$"
+        if re.search(pattern, updated, flags=re.MULTILINE):
+            updated = re.sub(pattern, f"{key}={value}", updated,
+                             flags=re.MULTILINE)
+        else:
+            updated += f"\n{key}={value}\n"
+
+    if updated != content:
+        print(f"Updating settings in {config_file}")
+        config_file.write_text(updated)
+
+def start_emulator(name, options):
+    """Start the emulator, falling back through the GPU modes."""
+    for gpu_mode in GPU_MODES:
+        print(f"Starting emulator: {name} (-gpu {gpu_mode}) {' '.join(options)}")
+        started = subprocess.run(
+            ["emulator", "-avd", name, "-gpu", gpu_mode, *options])
+        if started.returncode == 0:
+            return
+        print(f"Emulator failed with -gpu {gpu_mode}")
+
+# --------------------------------------------------------------- utilities
+
+def run(*cmd, env=None, **kwargs):
+    """Run a command, raising CalledProcessError if it fails."""
+    return subprocess.run([str(part) for part in cmd], check=True,
+                          env={**os.environ, **env} if env else None, **kwargs)
+
+def capture(*cmd):
+    """Run a command and return its standard output."""
+    return run(*cmd, text=True, capture_output=True).stdout
+
+def quietly(*cmd):
+    """Run a command, discarding its output and its failure."""
+    subprocess.run([str(part) for part in cmd], capture_output=True)
+
+def port_open(port):
+    with socket.socket() as probe:
+        probe.settimeout(0.5)
+        return probe.connect_ex(("127.0.0.1", port)) == 0
+
+def banner(title):
+    print(f"\n{f' {title} ':=^68}\n")
+
+def takes_arguments(function):
+    kinds = [p.kind for p in inspect.signature(function).parameters.values()]
+    return inspect.Parameter.VAR_POSITIONAL in kinds
+
+def list_commands(stream):
+    print("Available commands:", file=stream)
+    width = max(len(name) for name in COMMANDS)
+    for name, function in COMMANDS.items():
+        print(f"    {name:<{width}}  {inspect.getdoc(function)}", file=stream)
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

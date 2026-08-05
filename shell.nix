@@ -21,7 +21,6 @@ in pkgs.mkShell {
     androidsdk
     gradle_8
     nodejs
-    just
     maestro
   ];
   shellHook = ''

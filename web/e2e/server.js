@@ -1,6 +1,6 @@
-// Serves the app for the end-to-end tests the way `just build-web` lays it out:
+// Serves the app for the end-to-end tests the way `scripts/dev build-web` lays it out:
 // the same URL names, so `index.html`'s import map resolves exactly as it does
-// on the device. `just serve` cannot be used here because it serves the
+// on the device. `scripts/dev serve` cannot be used here because it serves the
 // *built* assets, which need a build to exist.
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -43,7 +43,7 @@ const TYPES = {
   ".svg": "image/svg+xml",
 };
 
-// `just build-web` substitutes the commit date and hash; the tests only need the
+// `scripts/dev build-web` substitutes the commit date and hash; the tests only need the
 // placeholder gone and a value they can assert on.
 export const VERSION = "e2e-test-build";
 

@@ -14,34 +14,33 @@ The npm project sits at the repository root, which is the layout Capacitor expec
 * `maestro/` — Maestro flows run on a device or emulator: `smoke.yaml` plus the four things a browser cannot show (`import.yaml`, `export.yaml`, `back-button.yaml`, `safe-area.yaml`).
 * `android/` — the generated Capacitor project. `MainActivity` is an empty `BridgeActivity` subclass; there is no hand-written Java left. The Gradle wrapper was deleted, so builds use the `gradle` from `shell.nix`.
 * `android/app/src/main/assets/public/` — generated; `cap sync` copies the built web app here, not in git.
-* `justfile` — every development command; `just` alone lists them.
-* `scripts/emulator` — AVD creation and emulator start, called by `just emulator`.
-* `shell.nix` — Android SDK, Gradle, Node.js, `just`. Its shell hook also points `GRADLE_USER_HOME` and `ANDROID_USER_HOME` inside the working tree, under `.cache/`.
+* `scripts/dev` — every development command, including AVD creation and emulator start; `scripts/dev` alone lists them.
+* `shell.nix` — Android SDK, Gradle, Node.js. Its shell hook also points `GRADLE_USER_HOME` and `ANDROID_USER_HOME` inside the working tree, under `.cache/`.
 
 ## Working in the Nix shell
 
-The project pins its toolchain, so use plain `nix-shell` rather than `--packages`, and drive everything through `just` inside it:
+The project pins its toolchain, so use plain `nix-shell` rather than `--packages`, and drive everything through `scripts/dev` inside it:
 
 ```
-nix-shell --run "just build"
+nix-shell --run "scripts/dev build"
 ```
 
-`just build` needs `$AAPT2`, which `shell.nix` exports; running it outside the shell will fail.
+`scripts/dev build` needs `$AAPT2`, which `shell.nix` exports; running it outside the shell will fail.
 
 ## Development loop
 
-`just` with no recipe lists what follows. `just` hides `npm`, `gradle` and `adb`: no recipe needs them run by hand.
+`scripts/dev` with no command lists what follows. It hides `npm`, `gradle` and `adb`: no command needs them run by hand. A command calls what it needs as plain Python functions, and the chain is linear — `build` → `build-android` → `sync` → `build-web` → `deps` — so each step runs once without any bookkeeping. `sync` and `deps` are steps in that chain, not commands: they are reached only through the commands above them.
 
-* `just serve` refreshes the web assets, then serves `build/web/dist` on port 8080 for browser-based iteration. It sends no cache headers, so Chrome will happily serve a stale `main.js`; force a hard reload after editing (a query string on the page URL does not change the module's own URL, so it stays cached).
-* `just build` builds the web app into `build/web/dist` (`build-web`), then packages the APK (`build-android`, which first runs `sync` for `npx cap sync android`). Either half can be run alone. Gradle runs with `--no-daemon`, so no build leaves a JVM behind.
-* `just install` checks that a device is attached, builds, then installs the debug APK. With no device it says so and stops before the build.
-* `just emulator` creates the `moneta` AVD if missing and starts it, in the foreground. It passes its arguments to the emulator, so `just emulator -no-window` runs it headless.
+* `scripts/dev serve` refreshes the web assets, then serves `build/web/dist` on port 8080 for browser-based iteration. It sends no cache headers, so Chrome will happily serve a stale `main.js`; force a hard reload after editing (a query string on the page URL does not change the module's own URL, so it stays cached).
+* `scripts/dev build` builds the web app into `build/web/dist` (`build-web`), then packages the APK (`build-android`, which first runs `sync` for `npx cap sync android`). Either half can be run alone. Gradle runs with `--no-daemon`, so no build leaves a JVM behind.
+* `scripts/dev install` checks that a device is attached, builds, then installs the debug APK. With no device it says so and stops before the build.
+* `scripts/dev emulator` creates the `moneta` AVD if missing and starts it, in the foreground. It passes its arguments to the emulator, so `scripts/dev emulator -no-window` runs it headless.
 
-* `just test` runs the unit tests in `web/test/` with Node's built-in runner, in a pinned timezone. `web/test/timezone.test.js` sets its own zones and clock, so it is the one place that proves dates survive a change of timezone.
-* `just lint` checks every JavaScript file in `web/` with ESLint (`eslint.config.js`, the recommended rule set plus per-area globals) and with Prettier in check mode. `just format` applies Prettier. `.prettierrc` fixes indentation at 2 spaces, forbids tabs and sets the line width to 80 columns, and turns `embeddedLanguageFormatting` off because it otherwise reformats the `html` tagged templates as HTML and mangles the Solid markup. `.prettierignore` excludes `index.html`, whose layout is hand-made around the import map, the custom CSS and the `%VERSION%` placeholder.
-* `just test-browser` runs the Playwright UI suite in `web/e2e/` under one Chromium project, `phone`, whose timezone is pinned to Asia/Kolkata so dated tests do not depend on the machine. It passes its arguments to Playwright, so `just test-browser add-expense --headed` works. It starts its own server on port 8099 from `web/e2e/server.js`, which serves `web/index.html`, `web/main.js` and the copied modules under the same names `build-web` gives them — so no build is needed, and the import map resolves exactly as it does on the device.
+* `scripts/dev test` runs the unit tests in `web/test/` with Node's built-in runner, in a pinned timezone. `web/test/timezone.test.js` sets its own zones and clock, so it is the one place that proves dates survive a change of timezone.
+* `scripts/dev lint` checks every JavaScript file in `web/` with ESLint (`eslint.config.js`, the recommended rule set plus per-area globals) and with Prettier in check mode. `scripts/dev format` applies Prettier. `.prettierrc` fixes indentation at 2 spaces, forbids tabs and sets the line width to 80 columns, and turns `embeddedLanguageFormatting` off because it otherwise reformats the `html` tagged templates as HTML and mangles the Solid markup. `.prettierignore` excludes `index.html`, whose layout is hand-made around the import map, the custom CSS and the `%VERSION%` placeholder.
+* `scripts/dev test-browser` runs the Playwright UI suite in `web/e2e/` under one Chromium project, `phone`, whose timezone is pinned to Asia/Kolkata so dated tests do not depend on the machine. It passes its arguments to Playwright, so `scripts/dev test-browser add-expense --headed` works. It starts its own server on port 8099 from `web/e2e/server.js`, which serves `web/index.html`, `web/main.js` and the copied modules under the same names `build-web` gives them — so no build is needed, and the import map resolves exactly as it does on the device.
 
-* `just test-android` runs the Maestro flows in `maestro/`; a flow path can be given to run one. It leaves running whatever it found running and stops whatever it started: with no device attached it starts a headless emulator, waits for `sys.boot_completed` and kills it on exit, and it kills the `adb` server too if port 5037 was closed when it began. It logs the emulator to `build/maestro/emulator.log`, then installs the app through `just install`, so it builds first. It writes `build/maestro/moneta-import.json` dated today, pushes it to `/sdcard/Download/` and tells the media store about it, because `maestro/import.yaml` picks that file out of the system file picker. The five flows take about 1m40s. `maestro` comes from `shell.nix`.
+* `scripts/dev test-android` runs the Maestro flows in `maestro/`; a flow path can be given to run one. It leaves running whatever it found running and stops whatever it started: with no device attached it starts a headless emulator, waits for `sys.boot_completed` and kills it on exit, and it kills the `adb` server too if port 5037 was closed when it began. It logs the emulator to `build/maestro/emulator.log`, then installs the app through `install`, so it builds first. It writes `build/maestro/moneta-import.json` dated today, pushes it to `/sdcard/Download/` and tells the media store about it, because `maestro/import.yaml` picks that file out of the system file picker. The five flows take about 1m40s. `maestro` comes from `shell.nix`.
 
 The unit tests cover the domain layer of `main.js` (validation, form conversion, stored JSON, store actions, import); the Playwright suite covers the Solid components and the flows through them (adding, editing, deleting, grouping and totals, blurred amounts, persistence and reload, import/export in both the browser and the native branch). Between them a UI change should be provable without a device. The Maestro flows take the rest: the system file picker, the Share sheet, the back button and the packaged APK itself.
 
@@ -60,7 +59,7 @@ npx playwright-cli --help # for usage
 
 ## JavaScript conventions in `main.js`
 
-* There is no bundler and no compile step. The browser loads `main.js` as an ES module and resolves `@capacitor/core`, `solid-js`, `solid-js/web`, `solid-js/store`, `solid-js/html` and the transition packages through the import map in `index.html`. Every such module has to be named in **three lists that must stay in step**: the `cp` block in the `justfile`'s `build-web`, `FILES` in `web/e2e/server.js`, and the import map itself. A missing entry gives a blank page, not an error.
+* There is no bundler and no compile step. The browser loads `main.js` as an ES module and resolves `@capacitor/core`, `solid-js`, `solid-js/web`, `solid-js/store`, `solid-js/html` and the transition packages through the import map in `index.html`. Every such module has to be named in **three lists that must stay in step**: `WEB_ASSETS` in `scripts/dev`, `FILES` in `web/e2e/server.js`, and the import map itself. A missing entry gives a blank page, not an error.
 * Markup uses Solid's `html` tagged template (no JSX, since JSX would need a compile step).
 * State is module level: a `createStore` array of expenses plus `createSignal`s `editedExpense` (an id, `NEW_EXPENSE`, or `null` — the one signal behind both dialogs), `showNumbers`, `saveNotice`.
 * Top-down ordering: `main` and `App` first, then components, then actions, then persistence, then small utilities (`toIsoDate`, `formatCurrency`, `beginningOfDay`, `now`, ...). Function declarations hoist, so no forward declarations are needed.

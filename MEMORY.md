@@ -11,19 +11,19 @@ _Reference context — observed facts and standing conventions for this project,
 ## Conventions
 
 - `main.js` has no import-time side effects; `index.html`'s inline module imports `main` and calls it. Why: the Node test suite imports `main.js`, and only `render` needs a DOM. How to apply: keep new top-level code in `main.js` side-effect free.
-- UI changes are verified in a real browser via `just test-browser`, the Playwright suite in `web/e2e/`; the Node unit tests cover only the domain layer. Why: nothing else catches wiring errors with no compile step.
-- Exploratory poking at the UI goes through `just serve` plus `playwright-cli`, outside the Playwright suite.
+- UI changes are verified in a real browser via `scripts/dev test-browser`, the Playwright suite in `web/e2e/`; the Node unit tests cover only the domain layer. Why: nothing else catches wiring errors with no compile step.
+- Exploratory poking at the UI goes through `scripts/dev serve` plus `playwright-cli`, outside the Playwright suite.
 - A claim about an animation is settled by sampling `getComputedStyle` at fixed delays through a press, not by eye or screenshot. Why: mid-transition values pinpointed two press-state stutters that screenshots could not show.
 - A view with no suite coverage yet is checked by a throwaway Node script that seeds `localStorage`, fixes the clock and screenshots each state. Why: it sees what a locator assertion cannot.
 - Long-running commands are given an explicit timeout. Why: a `nix-shell --run` that hung on a background server ran for 147 seconds before the user aborted it. How to apply: suite runs, builds, and anything that starts a server.
-- `just` recipes are run without asking the user first, Playwright included: they build, test, serve or drive a headless browser, all locally. Why: the user gave this standing permission after a Playwright run was queued for confirmation.
+- `scripts/dev` commands are run without asking the user first, Playwright included: they build, test, serve or drive a headless browser, all locally. Why: the user gave this standing permission after a Playwright run was queued for confirmation.
 - The UI suite reaches the app through `web/e2e/fixtures.js`, where locators live on the `MonetaApp` page object. Why: the app has no test hooks, so its markup is described in one place. How to apply: add locators there, not in a spec.
 - `MonetaApp` helpers that describe rendered content expose a locator, not an awaited snapshot. Why: `expect(await …).toEqual(…)` compares plain values and never retries, so it reads the DOM mid-render.
 - Lists rendered by the app are asserted with `expect(locator).toHaveText([...])`, which retries on both the element count and the texts.
 - A change to the UI suite's timing is judged by running the whole suite ~50 times, not once. Why: the one flake found this way struck 2 runs in 50, which ten runs had called clean.
 - Anything that must exist before `main()` runs — seeded expenses, a fixed clock, the Capacitor bridge — is installed by `app.open()` in `web/e2e/fixtures.js`.
 - A UI test that seeds dated expenses also fixes the clock with `open({ now })`. Why: an expense outside the current month renders as a fold line, not a row, so a real clock silently empties the list. How to apply: any spec with seeded dates.
-- A new development command is added as a `just` recipe rather than a script in `scripts/`. Why: `just --list` is the single index of what can be run here. How to apply: any build, test, serve or device task.
+- A new development command is added as a subcommand of `scripts/dev` rather than a new file in `scripts/`. Why: the list `scripts/dev` prints comes from those functions, so it cannot drift. How to apply: any build, test, serve or device task.
 - Design work is presented as five variations at a time, each naming its cost, in one self-contained static mockup file; the user locks in the pieces to keep. Why: costed alternatives converge faster than polishing a single option.
 - Behaviour changes carried along with a larger change are agreed with the user up front and reported individually afterwards. Why: otherwise a silent fix is indistinguishable from a mistake.
 - An edit is confirmed by re-reading the file before it is reported as done. Why: an edit the tool reported as applied was later found absent, and the user hit the unfixed bug again.
@@ -40,9 +40,9 @@ _Reference context — observed facts and standing conventions for this project,
 - In `solid-js/html`, reading a signal inside the expression that renders an `<input>` rebuilds that input on every keystroke and loses what was typed. Draft text has to live in a plain variable outside the reactive graph.
 - `solid-js/html` drops the static whitespace between an element and the expression that follows it, so `<b>${n}</b> ${word}` renders as `1expense`; the space has to be part of the interpolated string.
 - A CSS `gap` on a flex line hides missing text spacing: the page looks right while the DOM text runs the words together, which is what a screen reader and a copy-paste get.
-- `android/app/src/main/assets/public/` holds build output that can lag `web/`, so the installed APK shows a stale UI until `just build` runs; a bug seen "in the app" may be a bug in old assets.
-- `just serve` refreshes the assets it serves before serving them, so it never shows a stale UI.
-- `just build-web` and `web/e2e/server.js` copy and serve `bootstrap.css`, `file_download.svg` and `file_upload.svg`, which `web/index.html` no longer references.
+- `android/app/src/main/assets/public/` holds build output that can lag `web/`, so the installed APK shows a stale UI until `scripts/dev build` runs; a bug seen "in the app" may be a bug in old assets.
+- `scripts/dev serve` refreshes the assets it serves before serving them, so it never shows a stale UI.
+- `scripts/dev build-web` and `web/e2e/server.js` copy and serve `bootstrap.css`, `file_download.svg` and `file_upload.svg`, which `web/index.html` no longer references.
 - Two expenses added within the same millisecond receive the same `id`, after which `updateExpense` and `deleteExpense` act on both. Tapping the button cannot reach this; programmatic callers and tests can.
 - `playwright-cli click` against this app reports "performing click action" and then stalls without the click taking effect. Driving the DOM through `playwright-cli eval` with `element.click()` works reliably.
 - `playwright-cli upload` fails on the import flow with "can only be used when there is related modal state present", because the `<input type=file>` is created and clicked programmatically.
@@ -53,12 +53,14 @@ _Reference context — observed facts and standing conventions for this project,
 - Raw Playwright, unlike `@playwright/test`, dismisses no dialog on its own: a single `alert()` freezes the page and every later action waits for ever, so a script driving this app needs a `page.on("dialog")` handler.
 - `expenseError` rejects a date later than now, so a UTC-derived date would refuse every expense entered after 19:00 west of UTC, silently and with no crash.
 - Dropping one of two Playwright projects does not halve the wall clock: 344 tests across both zones ran in 34.5s, 172 in one zone in 46.7s, because the worker pool fills either way.
-- `just` has no file-timestamp dependency tracking, so `npm install` runs on every `test`, `test-browser` and `build-web` through the shared `deps` recipe, adding about 0.4s.
-- A `just` recipe runs each line in a separate shell unless it starts with a `#!/usr/bin/env bash` shebang, so a multi-line recipe carrying variables needs one.
+- `scripts/dev` steps call each other as plain Python functions down one linear chain, `build` → `build-android` → `sync` → `build-web` → `deps`, so each runs once with no bookkeeping.
+- `sync` and `deps` are plain functions in `scripts/dev`, not commands, so they are absent from the listing and cannot be run directly; `npx cap sync android` is reached only through `build-android`.
+- `scripts/dev build` calls only `build_android`. Why: `sync` already reaches `build_web`, so naming `build_web` in `build` too would delete and recopy `build/web` twice.
+- `scripts/dev` tracks no file timestamps, so `npm install` runs on every `test`, `test-browser` and `build-web` through the shared `deps` step, adding about 0.4s.
 - Gradle and the Android tools take their user home from the passwd entry for the running uid, Java's `user.home`, not from `$HOME`; where the two differ, caches and AVDs land outside the intended home.
 - A uid with no passwd entry at all leaves Java's `user.home` as `?`, which is the `:android:validateSigningDebug` failure recorded earlier as a sandbox landmine.
-- `scripts/emulator` reads `ANDROID_AVD_HOME` before falling back to `~/.android/avd`, so it still finds the AVD config when the two disagree.
-- `web/index.html` loads Fraunces and DM Sans from Google Fonts, so anything that opens the page waits on the public internet for the `load` event: `just serve`, a throwaway script, and the UI suite alike.
+- `configure_avd` in `scripts/dev` reads `ANDROID_AVD_HOME` before falling back to `~/.android/avd`, so it still finds the AVD config when the two disagree.
+- `web/index.html` loads Fraunces and DM Sans from Google Fonts, so anything that opens the page waits on the public internet for the `load` event: `scripts/dev serve`, a throwaway script, and the UI suite alike.
 - An external stall in the UI suite shows up as `page.goto` timing out, on a different spec each time; it struck 1 run in 10 until `fixtures.js` began answering the Google Fonts request itself.
 - A process started with `&` inside `nix-shell --run` holds the output pipe open, so the command never returns even once that process is killed. Redirecting the child's output to `/dev/null` releases it.
 - `pkill -f <pattern>` kills the shell running it when the pattern also appears in that shell's own command line; the run then ends with no output and no side effects at all.
@@ -67,7 +69,7 @@ _Reference context — observed facts and standing conventions for this project,
 - A `page.addInitScript` that seeds `localStorage` runs again on reload, so it has to write only when the key is absent; otherwise a reload restores the seed and hides what the app saved.
 - A Playwright geometry assertion made straight after opening the settings screen measures it mid-slide, because `toBeVisible` passes while it moves; `openSettings` in `web/e2e/fixtures.js` waits for `.cover-enter-active` to go.
 - Playwright's visibility ignores occlusion, so list rows behind the full-screen settings cover still count as visible; that a screen covers the app is provable only by comparing bounding boxes.
-- Playwright's browsers come from Nix: `shell.nix` exports `PLAYWRIGHT_BROWSERS_PATH` to `pkgs.playwright.browsers`, and `just test-browser` downloads nothing.
+- Playwright's browsers come from Nix: `shell.nix` exports `PLAYWRIGHT_BROWSERS_PATH` to `pkgs.playwright.browsers`, and `scripts/dev test-browser` downloads nothing.
 - `shell.nix` exports `FONTCONFIG_FILE` via `pkgs.makeFontsConf`. Why: with no fontconfig config Chromium aborts in Skia ("SkFontMgr_FontConfigInterface.cpp: Not implemented") on the first text it shapes.
 - A Chromium that dies mid-test reports as "Target page, context or browser has been closed" on whatever locator call was in flight; the real cause is the last `[pid=...][err]` line in the browser log.
 - `node_modules/playwright` is a 1.62 alpha pulled in by `@playwright/cli`, and its Chromium build is absent from the Nix browser set.
@@ -120,29 +122,31 @@ _Reference context — observed facts and standing conventions for this project,
 - Delete and import are confirmed with wording that names what will be lost; the add/edit dialog is not.
 - Chrome's blue tap highlight is suppressed app-wide and replaced by `:active` rules that darken the pressed surface one step in the palette. Why: nothing else in the design acknowledges a press.
 - Only controls whose tap leads elsewhere carry a pressed style; the category chips and the month total have none, since a tap changes how they are drawn and the extra step was felt as a stutter.
-- The app is zero-build — Solid's `html` tagged template plus an import map, no esbuild or Vite. Why: `just build-web` stays copy-only and `just serve` iteration is instant.
+- The app is zero-build — Solid's `html` tagged template plus an import map, no esbuild or Vite. Why: `scripts/dev build-web` stays copy-only and `scripts/dev serve` iteration is instant.
 - Unit tests run in Node against functions exported from `main.js`, with no jsdom and no test framework. Why: the Solid entry points and `@capacitor/core` all import headless, so the domain layer needs only stubbed `localStorage` and `alert`.
 - The add/edit sheet and the import path share one `expenseError` check, and the form's wording won: a blank imported description reports "Description cannot be empty."
 - An expense with no `categories` field loads as one with none. Why: earlier versions blanked the app at startup on such data.
 - Day headings call `formatDay(date, reference)`, which answers "Today", "Yesterday" or the day and month, while `toIsoDate` stays the storage format. Why: a heading is free to diverge from the way a date is stored.
-- Fraunces and DM Sans load from Google Fonts at runtime, so a device with no network falls back to a system serif and sans. Why: self-hosting them would make `just build-web` copy font files.
-- The Playwright suite serves the app from its own `web/e2e/server.js` rather than `just serve`. Why: `just serve` publishes the *built* assets in `build/web/dist`, which would make the UI suite depend on a build step.
+- Fraunces and DM Sans load from Google Fonts at runtime, so a device with no network falls back to a system serif and sans. Why: self-hosting them would make `scripts/dev build-web` copy font files.
+- The Playwright suite serves the app from its own `web/e2e/server.js` rather than `scripts/dev serve`. Why: `scripts/dev serve` publishes the *built* assets in `build/web/dist`, which would make the UI suite depend on a build step.
 - `web/e2e/server.js` maps the app's URL names straight onto `web/` and `node_modules`, so the UI suite needs no build step and exercises `index.html` unchanged.
 - The Playwright suite runs one Chromium project, `phone`, with `timezoneId` pinned to Asia/Kolkata. Why: an unpinned zone makes dated tests follow the machine, while varying the zone belongs at the unit level, where it is cheaper and explicit.
-- Timezone coverage lives in `web/test/timezone.test.js`: five zones (UTC, Kolkata, New York, Kiritimati, Niue) crossed with four instants, over three end-to-end date properties. The rest of `just test` runs once, with `TZ` pinned.
+- Timezone coverage lives in `web/test/timezone.test.js`: five zones (UTC, Kolkata, New York, Kiritimati, Niue) crossed with four instants, over three end-to-end date properties. The rest of `scripts/dev test` runs once, with `TZ` pinned.
 - `web/test/timezone.test.js` fixes the clock as well as the zone. Why: a UTC slip shows just after midnight or late in the evening, which are rarely the hours a suite is run at, so the old `TZ=... node --test` loop reached them only by luck.
 - Measured before the doubled runs were dropped: a `toIsoDate` UTC defect failed only 2 of 99 tests in the weaker of the two zones, where `timezone.test.js` fails 24 running in UTC alone. Why it matters: the loop's margin was thin, not generous.
 - Expectations about "today" in the UI suite are computed in the page, not in Node. Why: only the browser context carries the project's pinned timezone.
 - The native side is exercised in the browser against a recording stand-in installed before load, not on a device. Why: it pins the JavaScript side of the contract, which is what a UI change can break.
 - The native contract the UI suite pins is `Filesystem.writeFile` to the cache directory followed by `Share.share` of the returned `uri`.
 - The stand-in leaves everything the system does with the shared file, the file picker and the display cutout untested; that still needs a device.
-- Every development command lives in the `justfile`, run inside `nix-shell`, the boundary entered once per terminal. Why: `just` gives variadic argument passthrough and `--list` help, and hides npm, gradle and adb behind recipe names.
-- `scripts/` holds only `emulator` after the five bash scripts were absorbed into `just` recipes. Why: it is Python and too large to inline in a recipe.
-- `just build` splits into `build-web` and `build-android`, and `serve` depends only on `build-web`. Why: serving the app then needs no Gradle run, so it refreshes the assets itself and never shows stale ones.
-- `just build-android` runs Gradle with `--no-daemon`, so a build leaves no background JVM. Why: cleaning up after a run was worth more than a warm daemon, and the measured cost is small — an incremental build takes about 11s without one.
-- `just install` checks for an attached device before building, so it calls `just build` inside the recipe instead of declaring it a dependency. Why: a missing device then costs a second rather than a minute.
+- Every development command lives in `scripts/dev`, a Python dispatcher run inside `nix-shell`, the boundary entered once per terminal. Why: one front door in one language, hiding npm, gradle and adb behind subcommand names.
+- The development front door moved from a `justfile` to `scripts/dev`. Why: weighed one by one, no advantage of `just` over plain functions survived, and Python absorbs `scripts/emulator` into the same file.
+- `just` was dropped from `shell.nix` with the `justfile`, so nothing pins it any more.
+- `scripts/` holds only `dev`; the AVD creation and emulator start that were `scripts/emulator` are subcommands of it. Why: a Python dispatcher can hold them, which a `just` recipe could not.
+- `scripts/dev build` splits into `build-web` and `build-android`, and `serve` depends only on `build-web`. Why: serving the app then needs no Gradle run, so it refreshes the assets itself and never shows stale ones.
+- `scripts/dev build-android` runs Gradle with `--no-daemon`, so a build leaves no background JVM. Why: cleaning up after a run was worth more than a warm daemon, and the measured cost is small — an incremental build takes about 11s without one.
+- `scripts/dev install` checks for an attached device before it calls `build`. Why: a missing device then costs a second rather than a minute.
 - Linting is ESLint (flat config, recommended rules) plus Prettier, chosen over Biome and oxlint. Why: Prettier's defaults already matched the hand-written style, so the one-off reformat of `web/` changed only 135 lines across 12 files.
-- Linting is on demand through `just lint`; no build or test recipe runs it. Why: the user asked for a recipe, not a gate.
+- Linting is on demand through `scripts/dev lint`; no build or test command runs it. Why: the user asked for a command, not a gate.
 - `.prettierrc` at the repository root writes out 2-space indentation, no tabs and an 80-column width although all three are Prettier's defaults. Why: a Prettier upgrade then cannot move them silently.
 - Moneta was ported to Capacitor to stop maintaining the hand-written Java bridge; the back-button listener the port enabled was added afterwards, through `@capacitor/app`.
 - The port accepted losing every installed copy's `localStorage`, because `file://` and `http://localhost` are different origins. Why: only the author uses the app.
@@ -152,9 +156,9 @@ _Reference context — observed facts and standing conventions for this project,
 - The Maestro flows deliberately do not mirror the Playwright specs. Why: the same proof on device costs minutes per run instead of seconds.
 - `maestro/back-button.yaml` is the one place the real button, the real plugin and the real activity meet: the sheet and settings close, and a third back leaves the app.
 - `maestro/safe-area.yaml` proves only that the top and bottom controls are reachable, plus a screenshot in `build/maestro/`. Why: Maestro can assert no element bounds, so the spacing itself stays a human check.
-- `just test-android` starts a headless emulator only when no device is attached, and kills that one on exit with `adb emu kill`. Why: an attached device or an emulator started by hand is the developer's, not the suite's to close.
-- `just test-android` decides whether it owns the `adb` server by probing `/dev/tcp/127.0.0.1/5037` before its first `adb` call, since any `adb` call starts a server itself.
-- `just test-android` depends on `just install`. Why: `android/app/src/main/assets/public/` can lag `web/`, so a device suite that skipped the build could pass against a stale UI.
+- `scripts/dev test-android` starts a headless emulator only when no device is attached, and kills that one on exit with `adb emu kill`. Why: an attached device or an emulator started by hand is the developer's, not the suite's to close.
+- `scripts/dev test-android` and `scripts/dev emulator` both wrap their work in `own_adb_server`, which stops the `adb` server only if port 5037 was closed when the command began. Why: any `adb` call starts a server, and so does the emulator.
+- `scripts/dev test-android` calls `install` first. Why: `android/app/src/main/assets/public/` can lag `web/`, so a device suite that skipped the build could pass against a stale UI.
 - `web/e2e/safe-area.spec.js` proves the safe-area CSS by setting the `--safe-area-inset-*` variables by hand and reading the computed spacing. Why: no browser here has a cutout, and only the figures, not the wiring, need a device.
 
 ## Dead Ends
@@ -165,7 +169,8 @@ _Reference context — observed facts and standing conventions for this project,
 - ✗ Making settings a side panel over a permanently dimmed strip of the app was weighed and refused: it stops covering the app, which `web/e2e/settings.spec.js` asserts, and re-opens the back-button behaviour.
 - ✗ A "Discard this expense?" confirmation on closing the add/edit dialog was designed and then dropped as noise for what is usually an empty form.
 - ✗ direnv with `scripts/` on `PATH` as the command front door was rejected: direnv is not used here, and `test` and `install` collide with a shell builtin and a coreutils binary.
-- ✗ A Makefile and a `./dev` dispatcher script were both rejected as the development front door: Make passes arguments only as `ARGS=`, and the dispatcher earned its keep only by hiding `nix-shell`, which is entered anyway.
+- ✗ Prerequisite de-duplication, the last claimed advantage of `just` here, was abandoned as a requirement: the `justfile`'s `build: build-web build-android` declared an edge that `build-android` already carried through `sync`.
+- ✗ A Makefile was rejected as the development front door: it passes arguments only as `ARGS=`.
 - ✗ Leaving Prettier's `embeddedLanguageFormatting` on was abandoned: it reads the `html` tagged templates as HTML and re-indents the Solid markup, changing 369 lines of `main.js` against 28 with it off.
 - ✗ Moving `shell.nix` to a flake with `nix run .#…` apps was weighed and dropped: it types longer rather than shorter, and re-opens the `playwright-driver` version pinning.
 - ✗ Loading the Capacitor plugin packages' own JavaScript in the browser was rejected: their `dist/esm/index.js` uses bare and extension-less relative imports, and `dist/plugin.js` is an IIFE needing a `capacitorExports` global.
@@ -178,3 +183,4 @@ _Reference context — observed facts and standing conventions for this project,
 - ? Whether expense ids should stop being raw creation timestamps is undecided. A collision-free scheme has to preserve same-day sort order, which currently relies on ids increasing with creation time.
 - ? Whether the safe-area padding lands at the right size is unverified; `maestro/safe-area.yaml` shows only that the edge controls are reachable, and the screenshot needs a human eye.
 - ? Whether the shared export file is usable in a receiving app is unverified; the Maestro flow stops at the chooser, which reports "Sharing 1 file" and the `moneta-YYYY-MM-DD.json` name.
+- ? Why the first `scripts/dev test-android` run after the port exited 1 is unexplained; the two runs after it passed, so it is untriaged flakiness rather than a known defect.
