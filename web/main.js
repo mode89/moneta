@@ -702,7 +702,9 @@ export function parseExpenses(json) {
   return JSON.parse(json).map((expense) => ({
     ...expense,
     date: parseIsoDate(expense.date),
-    categories: [...(expense.categories ?? [])].sort(),
+    // Through parseCategories, not a plain sort: files written by the
+    // ClojureScript version hold [""] where an expense has no category.
+    categories: parseCategories((expense.categories ?? []).join(" ")),
   }));
 }
 

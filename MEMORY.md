@@ -49,6 +49,8 @@ _Reference context — observed facts and standing conventions for this project,
 - `android/app/src/main/assets/public/` holds build output that can lag `web/`, so the installed APK shows a stale UI until `scripts/dev build` runs; a bug seen "in the app" may be a bug in old assets.
 - `scripts/dev serve` refreshes the assets it serves before serving them, so it never shows a stale UI.
 - `scripts/dev build-web` and `web/e2e/server.js` copy and serve `bootstrap.css`, `file_download.svg` and `file_upload.svg`, which `web/index.html` no longer references.
+- Export files written by the ClojureScript version carry `"categories": [""]` for an uncategorised expense, since it split the empty form field on whitespace without filtering.
+- Importing such a file drew a nameless chip in the header legend, which renders one chip per distinct category name; `parseExpenses` now drops the blank.
 - Two expenses added within the same millisecond receive the same `id`, after which `updateExpense` and `deleteExpense` act on both. Tapping the button cannot reach this; programmatic callers and tests can.
 - `playwright-cli click` against this app reports "performing click action" and then stalls without the click taking effect. Driving the DOM through `playwright-cli eval` with `element.click()` works reliably.
 - `playwright-cli upload` fails on the import flow with "can only be used when there is related modal state present", because the `<input type=file>` is created and clicked programmatically.

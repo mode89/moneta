@@ -700,6 +700,21 @@ describe("stored JSON format", () => {
     assert.deepEqual(expense.categories, []);
   });
 
+  test("drops the blank category older files wrote for an uncategorised expense", () => {
+    const [expense] = parseExpenses(
+      JSON.stringify([
+        {
+          id: 1,
+          amount: 3,
+          description: "Coffee",
+          date: "2026-02-12",
+          categories: [""],
+        },
+      ]),
+    );
+    assert.deepEqual(expense.categories, []);
+  });
+
   test("rewrites unsorted categories on the way back out", () => {
     const unsorted = JSON.stringify(
       [
