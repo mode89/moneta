@@ -118,9 +118,15 @@ function App() {
           }}
         />`;
       }}
-      ${() =>
-        saveNotice() &&
-        html`<div class="notice" role="status">${saveNotice()}</div>`}
+      <${Transition}
+        name="notice"
+        onEnter=${settleTransition}
+        onExit=${settleTransition}
+      >
+        ${() =>
+          saveNotice() &&
+          html`<div class="notice" role="status">${saveNotice()}</div>`}
+      <//>
     </div>`;
 }
 

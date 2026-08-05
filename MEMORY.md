@@ -13,10 +13,11 @@ _Reference context — observed facts and standing conventions for this project,
 - `main.js` has no import-time side effects; `index.html`'s inline module imports `main` and calls it. Why: the Node test suite imports `main.js`, and only `render` needs a DOM. How to apply: keep new top-level code in `main.js` side-effect free.
 - UI changes are verified in a real browser via `scripts/dev test-browser`, the Playwright suite in `web/e2e/`; the Node unit tests cover only the domain layer. Why: nothing else catches wiring errors with no compile step.
 - Exploratory poking at the UI goes through `scripts/dev serve` plus `playwright-cli`, outside the Playwright suite.
-- A claim about an animation is settled by sampling `getComputedStyle` at fixed delays through a press, not by eye or screenshot. Why: mid-transition values pinpointed two press-state stutters that screenshots could not show.
+- A claim about an animation is settled by sampling computed style through the motion, not by eye or screenshot. Why: mid-transition values pinpointed two press-state stutters that screenshots could not show.
+- Computed-style sampling of an animation runs as an in-page `requestAnimationFrame` recorder keeping the frames where the drawn state changed. Why: it is the sampler that catches both ends of a 170ms transition.
 - A view with no suite coverage yet is checked by a throwaway Node script that seeds `localStorage`, fixes the clock and screenshots each state. Why: it sees what a locator assertion cannot.
 - Long-running commands are given an explicit timeout. Why: a `nix-shell --run` that hung on a background server ran for 147 seconds before the user aborted it. How to apply: suite runs, builds, and anything that starts a server.
-- `scripts/dev` commands are run without asking the user first, Playwright included: they build, test, serve or drive a headless browser, all locally. Why: the user gave this standing permission after a Playwright run was queued for confirmation.
+- Local test runs are made without asking the user first: `scripts/dev` commands, the `web/e2e` server and throwaway browser scripts alike. Why: the user gave this standing permission and restated it after a test command was queued for confirmation.
 - The UI suite reaches the app through `web/e2e/fixtures.js`, where locators live on the `MonetaApp` page object. Why: the app has no test hooks, so its markup is described in one place. How to apply: add locators there, not in a spec.
 - `MonetaApp` helpers that describe rendered content expose a locator, not an awaited snapshot. Why: `expect(await …).toEqual(…)` compares plain values and never retries, so it reads the DOM mid-render.
 - Lists rendered by the app are asserted with `expect(locator).toHaveText([...])`, which retries on both the element count and the texts.
@@ -38,6 +39,7 @@ _Reference context — observed facts and standing conventions for this project,
 - `main.js` names the App plugin proxy `AppPlugin`, since `App` is already the root Solid component.
 - A `registerPlugin` proxy's `addListener` reaches native through `nativeCallback`, not `nativePromise`, and needs an `addListener` method of rtype `callback` in that plugin's `PluginHeaders`.
 - A category is one lowercase word, since `parseCategories` splits on whitespace. The chip-style category input therefore commits on space, and two-word names are impossible without a storage-format change.
+- Fixed-delay computed-style sampling of an animation driven from Node misses it: one such run missed a whole enter transition and caught the exit only at the frame its classes applied.
 - An overlay whose CSS transition never runs stayed in the DOM for ever before `settleTransition`: `solid-transition-group` removes the element on `transitionend` alone, and both animations turned off and a stalled main thread suppress that event.
 - `solid-transition-group` adds its own `transitionend` listener only when the `onEnter`/`onExit` hook takes fewer than two parameters, so a hook of arity 2 owns completion and must call `done` itself.
 - The intermittent `back-button.spec.js` failure, about 1 full suite run in 4, was that overlay defect under parallel load rather than a test race; 50 consecutive runs pass since `settleTransition`.
@@ -74,6 +76,7 @@ _Reference context — observed facts and standing conventions for this project,
 - A Playwright geometry assertion made straight after opening the settings screen measures it mid-slide, because `toBeVisible` passes while it moves; `openSettings` in `web/e2e/fixtures.js` waits for `.cover-enter-active` to go.
 - Playwright's visibility ignores occlusion, so list rows behind the full-screen settings cover still count as visible; that a screen covers the app is provable only by comparing bounding boxes.
 - Playwright's browsers come from Nix: `shell.nix` exports `PLAYWRIGHT_BROWSERS_PATH` to `pkgs.playwright.browsers`, and `scripts/dev test-browser` downloads nothing.
+- A Playwright script run outside `nix-shell` dies with "Executable doesn't exist" and Playwright's install banner, since `PLAYWRIGHT_BROWSERS_PATH` is exported by `shell.nix` alone.
 - `shell.nix` exports `FONTCONFIG_FILE` via `pkgs.makeFontsConf`. Why: with no fontconfig config Chromium aborts in Skia ("SkFontMgr_FontConfigInterface.cpp: Not implemented") on the first text it shapes.
 - A Chromium that dies mid-test reports as "Target page, context or browser has been closed" on whatever locator call was in flight; the real cause is the last `[pid=...][err]` line in the browser log.
 - `node_modules/playwright` is a 1.62 alpha pulled in by `@playwright/cli`, and its Chromium build is absent from the Nix browser set.
@@ -191,3 +194,4 @@ _Reference context — observed facts and standing conventions for this project,
 - ? Whether the shared export file is usable in a receiving app is unverified; the Maestro flow stops at the chooser, which reports "Sharing 1 file" and the `moneta-YYYY-MM-DD.json` name.
 - ? Why the first `scripts/dev test-android` run after the port exited 1 is unexplained; the two runs after it passed, so it is untriaged flakiness rather than a known defect.
 - ? Whether to add a `prefers-reduced-motion` rule is undecided; `settleTransition` removed the blocker, since a transition of `0s` now completes at once.
+- ? No spec asserts the Saved notice's animation: the UI suite proves only that it appears and goes, so it would pass with the transition removed, and unlike the sheet it has no animations-off test.

@@ -271,6 +271,10 @@
         z-index: 10;
         box-shadow: 0 8px 20px rgba(20, 15, 12, 0.3);
       }
+      .notice-enter-active, .notice-exit-active { transition: opacity 170ms ease, transform 170ms ease; }
+      /* The centring translateX has to be repeated here, or the bubble jumps
+         to the left edge for the length of the transition. */
+      .notice-enter, .notice-exit-to { opacity: 0; transform: translateX(-50%) translateY(10px); }
 
       /* dialogs: a dim that closes them, and the sheet or card it carries */
       /* dialogs sit above the settings screen, which they can be opened from */
