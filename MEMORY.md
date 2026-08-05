@@ -65,6 +65,7 @@ _Reference context — observed facts and standing conventions for this project,
 - Playwright's list and line reporters print the failed-test names *between* the "N failed" and "M passed" lines, so reading only the tail of a run shows a pass count and hides the failures above it.
 - A UI test that stops the clock and then adds several expenses gives them all one id, because ids are creation timestamps. `app.tick()` in the e2e fixtures moves a fixed clock forward between saves.
 - A `page.addInitScript` that seeds `localStorage` runs again on reload, so it has to write only when the key is absent; otherwise a reload restores the seed and hides what the app saved.
+- A Playwright geometry assertion made straight after opening the settings screen measures it mid-slide, because `toBeVisible` passes while it moves; `openSettings` in `web/e2e/fixtures.js` waits for `.cover-enter-active` to go.
 - Playwright's visibility ignores occlusion, so list rows behind the full-screen settings cover still count as visible; that a screen covers the app is provable only by comparing bounding boxes.
 - Playwright's browsers come from Nix: `shell.nix` exports `PLAYWRIGHT_BROWSERS_PATH` to `pkgs.playwright.browsers`, and `just test-browser` downloads nothing.
 - `shell.nix` exports `FONTCONFIG_FILE` via `pkgs.makeFontsConf`. Why: with no fontconfig config Chromium aborts in Skia ("SkFontMgr_FontConfigInterface.cpp: Not implemented") on the first text it shapes.
@@ -112,7 +113,9 @@ _Reference context — observed facts and standing conventions for this project,
 - Settings sits behind a gear top-right and closes with a ✕ in the same corner, holding only Export, Import and the version.
 - Sheet animation uses `solid-transition-group`'s `<Transition>`, not a hand-rolled `setTimeout` before unmount. Why: it is the package the Solid project publishes for this, and the duration then lives only in CSS.
 - `<Transition>` runs in `mode="outin"`, so a reopened sheet waits for the leaving one. Why: simultaneous mode put two `.sheet` elements in the page at once and broke every locator that assumes one.
-- Only the add/edit sheet animates; the confirmation cards and the settings screen still appear and vanish instantly.
+- The settings screen slides in from the right and back out over 190ms, through the same `<Transition>` the sheet uses. Why: horizontal motion reads as a screen beside the app, where the sheet's rise reads as a panel over it.
+- A dim sits behind the settings screen and fades with its travel, but is seen only while it moves, since the screen is opaque and covers the app at rest.
+- The confirmation cards are the last overlays that still appear and vanish instantly.
 - Settings holds no list of categories. Why: it would duplicate the header chips and could report a duplicate-name problem without offering rename, merge or delete to fix it.
 - Delete and import are confirmed with wording that names what will be lost; the add/edit dialog is not.
 - Chrome's blue tap highlight is suppressed app-wide and replaced by `:active` rules that darken the pressed surface one step in the palette. Why: nothing else in the design acknowledges a press.
@@ -159,6 +162,7 @@ _Reference context — observed facts and standing conventions for this project,
 - ✗ Assigning each category a random colour from the least-used tones was abandoned: it guarantees distinct colours but requires storing the assignments, cleaning them up when a category disappears, and reassigning on import.
 - ✗ Visual directions explored and rejected for this app: greenbar ledger, thermal till roll, coin/ring, dark instrument gauge, and a neo-brutalist bar-chart list.
 - ✗ A `prefers-reduced-motion` rule setting `transition: none` on the sheet was rejected: `Transition` unmounts on `transitionend`, which never fires without a transition. Honouring it needs an `onExit(el, done)` hook.
+- ✗ Making settings a side panel over a permanently dimmed strip of the app was weighed and refused: it stops covering the app, which `web/e2e/settings.spec.js` asserts, and re-opens the back-button behaviour.
 - ✗ A "Discard this expense?" confirmation on closing the add/edit dialog was designed and then dropped as noise for what is usually an empty form.
 - ✗ direnv with `scripts/` on `PATH` as the command front door was rejected: direnv is not used here, and `test` and `install` collide with a shell builtin and a coreutils binary.
 - ✗ A Makefile and a `./dev` dispatcher script were both rejected as the development front door: Make passes arguments only as `ARGS=`, and the dispatcher earned its keep only by hiding `nix-shell`, which is entered anyway.

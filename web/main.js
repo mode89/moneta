@@ -87,7 +87,9 @@ function App() {
           }}
         />`;
       }}
-      ${() => settingsOpen() && html`<${SettingsScreen} />`}
+      <${Transition} name="cover" mode="outin">
+        ${() => (settingsOpen() ? html`<${SettingsScreen} />` : null)}
+      <//>
       ${() => {
         const review = reviewedImport();
         if (review === null) return null;
@@ -431,32 +433,34 @@ function ConfirmCard(props) {
 // is used a few times a year.
 function SettingsScreen() {
   return html`
-    <div class="cover">
-      <div class="bar">
-        <button
-          class="corner"
-          aria-label="Close settings"
-          onClick=${() => setSettingsOpen(false)}
-        >
-          ✕
-        </button>
-        <h2>Settings</h2>
-      </div>
-      <div class="scroll">
-        <div class="group-label">Your data</div>
-        <div class="set-row" onClick=${exportExpenses}>
-          <div>
-            <div class="set-title">Export expenses</div>
-            <div class="set-help">Save a JSON file you can keep or move</div>
-          </div>
+    <div class="cover-layer">
+      <div class="cover">
+        <div class="bar">
+          <button
+            class="corner"
+            aria-label="Close settings"
+            onClick=${() => setSettingsOpen(false)}
+          >
+            ✕
+          </button>
+          <h2>Settings</h2>
         </div>
-        <div class="set-row" onClick=${importExpenses}>
-          <div>
-            <div class="set-title">Import expenses</div>
-            <div class="set-help">Replaces everything on this device</div>
+        <div class="scroll">
+          <div class="group-label">Your data</div>
+          <div class="set-row" onClick=${exportExpenses}>
+            <div>
+              <div class="set-title">Export expenses</div>
+              <div class="set-help">Save a JSON file you can keep or move</div>
+            </div>
           </div>
+          <div class="set-row" onClick=${importExpenses}>
+            <div>
+              <div class="set-title">Import expenses</div>
+              <div class="set-help">Replaces everything on this device</div>
+            </div>
+          </div>
+          <div class="version">Version ${appVersion()}</div>
         </div>
-        <div class="version">Version ${appVersion()}</div>
       </div>
     </div>`;
 }

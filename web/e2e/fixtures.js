@@ -142,6 +142,10 @@ export class MonetaApp {
 
     // settings
     this.settings = page.locator(".cover");
+    // Present only while the settings screen slides in or out.
+    this.movingSettings = page.locator(
+      ".cover-enter-active, .cover-exit-active",
+    );
     this.closeSettingsButton = page.getByLabel("Close settings");
     this.exportRow = this.settings.locator(".set-row").filter({
       hasText: "Export expenses",
@@ -308,6 +312,7 @@ export class MonetaApp {
   async openSettings() {
     await this.settingsButton.click();
     await expect(this.settings).toBeVisible();
+    await expect(this.movingSettings).toHaveCount(0);
   }
 
   async closeSettings() {

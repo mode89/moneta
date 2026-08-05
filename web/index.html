@@ -374,11 +374,19 @@
       .cover {
         position: absolute;
         inset: 0;
-        z-index: 5;
         background: var(--desk);
         display: flex;
         flex-direction: column;
       }
+      /* The dim and the screen move together as one layer, which is also the
+         element `Transition` watches, as with the sheet. The dim is only seen
+         while the screen travels: at rest the opaque screen hides it. */
+      .cover-layer { position: absolute; inset: 0; z-index: 5; background: rgba(47, 42, 42, 0.42); }
+      .cover-enter-active, .cover-exit-active { transition: background-color 190ms ease; }
+      .cover-exit-active { pointer-events: none; }
+      .cover-enter-active .cover, .cover-exit-active .cover { transition: transform 190ms ease; }
+      .cover-enter, .cover-exit-to { background-color: transparent; }
+      .cover-enter .cover, .cover-exit-to .cover { transform: translateX(100%); }
       .bar { padding: calc(24px + var(--safe-top)) 22px 14px; position: relative; }
       .bar h2 { font-family: var(--display); font-weight: 600; font-size: 1.7rem; margin: 0; }
       .group-label {
