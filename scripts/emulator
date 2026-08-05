@@ -31,8 +31,8 @@ def main():
 
     configure_avd(AVD_NAME, AVD_SETTINGS)
 
-    # Start emulator
-    start_emulator(AVD_NAME)
+    # Start emulator, forwarding any extra options (for example -no-window)
+    start_emulator(AVD_NAME, sys.argv[1:])
 
 def run_command(cmd, input_text=None, capture_output=True):
     """Run a shell command and return the result."""
@@ -93,11 +93,12 @@ def configure_avd(avd_name, settings):
         f.write(updated)
     return True
 
-def start_emulator(avd_name):
+def start_emulator(avd_name, options):
     """Start the emulator, falling back through the GPU modes."""
+    extra = " ".join(options)
     for gpu_mode in GPU_MODES:
-        print(f"Starting emulator: {avd_name} (-gpu {gpu_mode})")
-        cmd = f"emulator -avd \"{avd_name}\" -gpu {gpu_mode}"
+        print(f"Starting emulator: {avd_name} (-gpu {gpu_mode}) {extra}")
+        cmd = f"emulator -avd \"{avd_name}\" -gpu {gpu_mode} {extra}"
         result = run_command(cmd, capture_output=False)
         if result and result.returncode == 0:
             return True

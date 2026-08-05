@@ -1,0 +1,23 @@
+# The app draws under the status and navigation bars, so every edge control
+# depends on the safe-area insets Capacitor's SystemBars plugin supplies. If an
+# inset were missing, the top control would sit under the status bar and a tap
+# on it would open the notification shade instead, and the floating + would sit
+# under the navigation bar.
+#
+# web/e2e/safe-area.spec.js sets the inset variables by hand; only a device
+# supplies the real ones. The screenshot is written to build/ for a human to
+# check the spacing, which no assertion here can judge.
+appId: net.akrain.moneta
+---
+- launchApp:
+    clearState: true
+- takeScreenshot: build/maestro/safe-area
+
+# Top edge: the gear reaches the app, not the status bar.
+- tapOn: "Settings"
+- assertVisible: "Export expenses"
+- tapOn: "Close settings"
+
+# Bottom edge: the floating + reaches the app, not the navigation bar.
+- tapOn: "Add an expense"
+- assertVisible: "Save expense"

@@ -16,6 +16,46 @@ test: deps
 test-browser *args: deps
     npx playwright test {{ args }}
 
+# Run the Maestro flows in maestro/; starts a headless emulator and an adb
+# server if they are not running, and stops what it started. Takes a flow path.
+test-android *args:
+    #!/usr/bin/env bash
+    set -e
+    mkdir -p build/maestro
+    # What this recipe finds running is left running; what it starts, it stops.
+    started_emulator=false
+    started_adb=true
+    (exec 3<>/dev/tcp/127.0.0.1/5037) 2> /dev/null && started_adb=false
+    cleanup() {
+      $started_emulator && adb emu kill > /dev/null 2>&1
+      $started_adb && adb kill-server > /dev/null 2>&1
+      true
+    }
+    trap cleanup EXIT
+    if [ "$(adb devices | awk 'NR > 1 && $2 == "device"' | wc -l)" -eq 0 ]; then
+      echo "No device attached. Starting a headless emulator."
+      started_emulator=true
+      # The child keeps the output pipe of `nix-shell --run` open unless its
+      # output goes elsewhere, and the run then never returns.
+      just emulator -no-window -no-audio -no-boot-anim \
+          > build/maestro/emulator.log 2>&1 &
+      adb wait-for-device
+      adb shell 'while [ "$(getprop sys.boot_completed)" != 1 ]; do sleep 1; done'
+    fi
+    just install
+    echo
+    echo "======================= Running device flows ======================"
+    echo
+    # maestro/import.yaml picks this file out of the system file picker. Its
+    # date is today's, so the imported expense lands in the open month.
+    printf '[{"id":1,"amount":42.5,"description":"Imported lunch","date":"%s","categories":["food"]}]' \
+        "$(date +%Y-%m-%d)" > build/maestro/moneta-import.json
+    adb push build/maestro/moneta-import.json /sdcard/Download/moneta-import.json
+    # The picker lists a file only once the media store knows about it.
+    adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE \
+        -d file:///sdcard/Download/moneta-import.json > /dev/null
+    maestro test {{ if args == "" { "maestro" } else { args } }}
+
 # Check the JavaScript in web/ with ESLint and Prettier.
 lint: deps
     npx eslint .
@@ -29,9 +69,9 @@ format: deps
 serve: build-web
     cd build/web/dist && python3 -m http.server 8080
 
-# Create the moneta AVD if missing and start the emulator.
-emulator:
-    scripts/emulator
+# Create the moneta AVD if missing and start it; takes emulator options.
+emulator *args:
+    scripts/emulator {{ args }}
 
 # Build the web assets and the Android APK.
 build: build-web build-android
@@ -96,7 +136,10 @@ build-android: sync
     echo
     echo "====================== Building Android app ========================"
     echo
-    cd android && gradle -Dorg.gradle.project.android.aapt2FromMavenOverride=${AAPT2:?} build
+    # --no-daemon: the build leaves no background JVM behind, at the cost of a
+    # cold start on every run.
+    cd android && gradle --no-daemon \
+        -Dorg.gradle.project.android.aapt2FromMavenOverride=${AAPT2:?} build
 
 # Install the web dependencies.
 deps:

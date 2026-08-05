@@ -1,0 +1,29 @@
+# Capacitor has no Save-As dialog, so exporting writes the file to the cache
+# directory and offers it with the Share sheet. Only a device shows that the
+# written file reaches the system chooser under the right name.
+appId: net.akrain.moneta
+---
+- launchApp:
+    clearState: true
+- tapOn: "Add an expense"
+- tapOn:
+    text: ".*AMOUNT"
+    index: 1
+- inputText: "12.50"
+- tapOn:
+    text: ".*DESCRIPTION"
+    index: 1
+- inputText: "Coffee"
+- hideKeyboard
+- tapOn: "Save expense"
+
+- tapOn: "Settings"
+- tapOn: "Export expenses"
+
+# The system share sheet, not the app.
+- assertVisible: "Sharing 1 file"
+- assertVisible: "moneta-\\d{4}-\\d{2}-\\d{2}\\.json"
+
+# Leaving the chooser returns to the app, still on the settings screen.
+- back
+- assertVisible: "Export expenses"

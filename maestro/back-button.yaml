@@ -1,0 +1,20 @@
+# Records what the Android back button does today: nothing listens for it, so
+# it finishes the activity. With the add sheet open it therefore closes the
+# whole app instead of the sheet. A browser has no back button of this kind,
+# so no other test can see this.
+#
+# When a back handler is added, this flow has to be rewritten to expect the
+# sheet to close and the app to stay.
+appId: net.akrain.moneta
+---
+- launchApp:
+    clearState: true
+- tapOn: "Add an expense"
+- assertVisible: "Save expense"
+- back
+- assertNotVisible: "Save expense"
+- assertNotVisible: "Add an expense"
+
+# The app is gone, not merely covered: relaunching starts it afresh.
+- launchApp
+- assertVisible: "Nothing recorded yet.*"

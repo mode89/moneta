@@ -22,6 +22,7 @@ in pkgs.mkShell {
     gradle_8
     nodejs
     just
+    maestro
   ];
   shellHook = ''
     export ANDROID_SDK_ROOT=${androidsdk}/libexec/android-sdk
@@ -33,6 +34,8 @@ in pkgs.mkShell {
     export GRADLE_USER_HOME=${toString ./.}/.cache/gradle
     export ANDROID_USER_HOME=${toString ./.}/.cache/android
     export ANDROID_AVD_HOME=$ANDROID_USER_HOME/avd
+    export MAESTRO_CLI_NO_ANALYTICS=1
+    export MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED=true
     # Without a fontconfig config Chromium aborts in Skia on the first text it
     # has to shape, killing the browser mid-test.
     export FONTCONFIG_FILE=${pkgs.makeFontsConf { fontDirectories = [ pkgs.dejavu_fonts ]; }}

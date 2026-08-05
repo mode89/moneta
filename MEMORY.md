@@ -33,6 +33,7 @@ _Reference context — observed facts and standing conventions for this project,
 ## Gotchas
 
 - Nothing listens for the Android back button, so it finishes the activity — with a dialog open it closes the whole app rather than the dialog. `@capacitor/android` carries no back handling of its own, and `@capacitor/app` is not installed.
+- Pressing back with the add sheet open leaves the launcher as the resumed activity, measured on an emulator with `dumpsys activity activities`.
 - A category is one lowercase word, since `parseCategories` splits on whitespace. The chip-style category input therefore commits on space, and two-word names are impossible without a storage-format change.
 - In `solid-js/html`, reading a signal inside the expression that renders an `<input>` rebuilds that input on every keystroke and loses what was typed. Draft text has to live in a plain variable outside the reactive graph.
 - `solid-js/html` drops the static whitespace between an element and the expression that follows it, so `<b>${n}</b> ${word}` renders as `1expense`; the space has to be part of the interpolated string.
@@ -76,6 +77,10 @@ _Reference context — observed facts and standing conventions for this project,
 - Capacitor's `getPlatformId` calls the platform "android" purely because `window.androidBridge` exists; nothing else is consulted.
 - A `registerPlugin` proxy reaches native code only when `Capacitor.PluginHeaders` names that plugin and method; `JSExport.java` injects the headers. Without a header and without a JS implementation the call throws "not implemented".
 - ESLint and Prettier ignore `.cache/`. Why: the Gradle home there unpacks Capacitor's own `native-bridge.js`, which alone fails the lint with 83 errors.
+- The blur over amounts is CSS only, so the accessibility tree — and any screen reader — carries the figures in clear.
+- Maestro 2.5.1 has no `className` selector; a WebView input is picked out by its label regex plus `index: 1`, the label View being match 0.
+- Maestro writes its failure screenshots and logs to `~/.maestro/tests/<timestamp>/`, outside the project.
+- Running the emulator headless inside bubblewrap needs `/dev/kvm` bind-mounted, the uid in the `kvm` group, `adb` and the emulator in one network namespace, a writable `/tmp` for the port lock files, and a passwd entry for the uid.
 - targetSdk 36 forces edge-to-edge display, so the app draws under the status and navigation bars, and every edge in the CSS carries its own spacing plus the bar's inset.
 - Capacitor's `SystemBars` plugin lets the window insets reach the page only when the viewport meta carries `viewport-fit=cover` and the WebView is version 140 or later.
 - Where `SystemBars` withholds the insets it pads the WebView's parent view instead, so the page never draws under the system bars.
@@ -126,6 +131,7 @@ _Reference context — observed facts and standing conventions for this project,
 - Every development command lives in the `justfile`, run inside `nix-shell`, the boundary entered once per terminal. Why: `just` gives variadic argument passthrough and `--list` help, and hides npm, gradle and adb behind recipe names.
 - `scripts/` holds only `emulator` after the five bash scripts were absorbed into `just` recipes. Why: it is Python and too large to inline in a recipe.
 - `just build` splits into `build-web` and `build-android`, and `serve` depends only on `build-web`. Why: serving the app then needs no Gradle run, so it refreshes the assets itself and never shows stale ones.
+- `just build-android` runs Gradle with `--no-daemon`, so a build leaves no background JVM. Why: cleaning up after a run was worth more than a warm daemon, and the measured cost is small — an incremental build takes about 11s without one.
 - `just install` checks for an attached device before building, so it calls `just build` inside the recipe instead of declaring it a dependency. Why: a missing device then costs a second rather than a minute.
 - Linting is ESLint (flat config, recommended rules) plus Prettier, chosen over Biome and oxlint. Why: Prettier's defaults already matched the hand-written style, so the one-off reformat of `web/` changed only 135 lines across 12 files.
 - Linting is on demand through `just lint`; no build or test recipe runs it. Why: the user asked for a recipe, not a gate.
@@ -134,6 +140,13 @@ _Reference context — observed facts and standing conventions for this project,
 - The port accepted losing every installed copy's `localStorage`, because `file://` and `http://localhost` are different origins. Why: only the author uses the app.
 - The UI suite's native stand-in imitates what the WebView injects — `window.androidBridge`, `Capacitor.PluginHeaders` and `nativePromise` — rather than the app's plugin objects. Why: the plugin proxies then come from Capacitor's own code.
 - The Gradle wrapper that `cap add android` generates is deleted, so the `gradle` pinned by `shell.nix` builds the app, run inside `android/`. Why: one Gradle version, as before the port. Cost: `npx cap run android` cannot be used.
+- The Maestro suite in `maestro/` covers only what a browser cannot — the system file picker, the Share sheet, the back button, the real safe-area insets — plus one smoke flow over the packaged APK.
+- The Maestro flows deliberately do not mirror the Playwright specs. Why: the same proof on device costs minutes per run instead of seconds.
+- `maestro/back-button.yaml` asserts today's defective behaviour, that back closes the app. Why: a device suite that skips the known defect cannot notice when it changes.
+- `maestro/safe-area.yaml` proves only that the top and bottom controls are reachable, plus a screenshot in `build/maestro/`. Why: Maestro can assert no element bounds, so the spacing itself stays a human check.
+- `just test-android` starts a headless emulator only when no device is attached, and kills that one on exit with `adb emu kill`. Why: an attached device or an emulator started by hand is the developer's, not the suite's to close.
+- `just test-android` decides whether it owns the `adb` server by probing `/dev/tcp/127.0.0.1/5037` before its first `adb` call, since any `adb` call starts a server itself.
+- `just test-android` depends on `just install`. Why: `android/app/src/main/assets/public/` can lag `web/`, so a device suite that skipped the build could pass against a stale UI.
 - `web/e2e/safe-area.spec.js` proves the safe-area CSS by setting the `--safe-area-inset-*` variables by hand and reading the computed spacing. Why: no browser here has a cutout, and only the figures, not the wiring, need a device.
 
 ## Dead Ends
@@ -155,4 +168,5 @@ _Reference context — observed facts and standing conventions for this project,
 - ? Whether the sheet's `+ new` chip should become a typeahead that filters the offered chips is undecided; it is the only option weighed that scales past a scrolling line, and costs a filtered memo plus new tests.
 - ? No screen totals a category across months; the header chips are per-month only.
 - ? Whether expense ids should stop being raw creation timestamps is undecided. A collision-free scheme has to preserve same-day sort order, which currently relies on ids increasing with creation time.
-- ? Whether Capacitor's WebView opens the system file picker for `<input type=file>`, whether the Share-sheet export yields a usable file, and whether the safe-area padding lands correctly are all unverified; each needs a device.
+- ? Whether the safe-area padding lands at the right size is unverified; `maestro/safe-area.yaml` shows only that the edge controls are reachable, and the screenshot needs a human eye.
+- ? Whether the shared export file is usable in a receiving app is unverified; the Maestro flow stops at the chooser, which reports "Sharing 1 file" and the `moneta-YYYY-MM-DD.json` name.

@@ -1,0 +1,50 @@
+# The packaged APK really works: add, edit and delete one expense on device.
+# The browser suite covers the same flow in web/e2e/journey.spec.js; here it
+# proves the built assets, the WebView and the accessibility tree, not the UI
+# logic.
+#
+# The amount input is right-aligned, so a tap on its centre lands before the
+# text and erasing it deletes nothing. The edit step therefore changes the
+# description, which is left-aligned.
+appId: net.akrain.moneta
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Nothing recorded yet.*"
+
+# Add
+- tapOn: "Add an expense"
+- assertVisible: "Add an expense"
+- tapOn:
+    text: ".*AMOUNT"
+    index: 1
+- inputText: "12.50"
+- tapOn:
+    text: ".*DESCRIPTION"
+    index: 1
+- inputText: "Coffee"
+- hideKeyboard
+- tapOn: "Save expense"
+- assertVisible: "Coffee"
+- assertVisible: "$12.50"
+
+# Edit
+- tapOn: "Coffee"
+- assertVisible: "Edit expense"
+- tapOn:
+    text: ".*DESCRIPTION"
+    index: 1
+- eraseText
+- inputText: "Tea"
+- hideKeyboard
+- tapOn: "Save changes"
+- assertVisible: "Tea"
+- assertNotVisible: "Coffee"
+- assertVisible: "$12.50"
+
+# Delete
+- tapOn: "Tea"
+- tapOn: "Delete"
+- assertVisible: "Delete this expense?"
+- tapOn: "Delete"
+- assertVisible: "Nothing recorded yet.*"
