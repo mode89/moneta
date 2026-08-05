@@ -1,20 +1,29 @@
-# Records what the Android back button does today: nothing listens for it, so
-# it finishes the activity. With the add sheet open it therefore closes the
-# whole app instead of the sheet. A browser has no back button of this kind,
-# so no other test can see this.
-#
-# When a back handler is added, this flow has to be rewritten to expect the
-# sheet to close and the app to stay.
+# The Android back button closes one overlay at a time and leaves the app only
+# when nothing is open. A browser has no back button of this kind, so the
+# Playwright suite can only fire the plugin event the WebView delivers; this
+# flow is the one place the real button, the real plugin and the real activity
+# are all involved.
 appId: net.akrain.moneta
 ---
 - launchApp:
     clearState: true
+
+# The add sheet closes and the app stays.
 - tapOn: "Add an expense"
 - assertVisible: "Save expense"
 - back
 - assertNotVisible: "Save expense"
-- assertNotVisible: "Add an expense"
+- assertVisible: "Add an expense"
 
-# The app is gone, not merely covered: relaunching starts it afresh.
+# So does settings.
+- tapOn: "Settings"
+- assertVisible: "Export expenses"
+- back
+- assertNotVisible: "Export expenses"
+- assertVisible: "Add an expense"
+
+# With nothing open the app exits, and relaunching starts it afresh.
+- back
+- assertNotVisible: "Add an expense"
 - launchApp
 - assertVisible: "Nothing recorded yet.*"

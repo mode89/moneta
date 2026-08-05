@@ -32,8 +32,10 @@ _Reference context — observed facts and standing conventions for this project,
 
 ## Gotchas
 
-- Nothing listens for the Android back button, so it finishes the activity — with a dialog open it closes the whole app rather than the dialog. `@capacitor/android` carries no back handling of its own, and `@capacitor/app` is not installed.
-- Pressing back with the add sheet open leaves the launcher as the resumed activity, measured on an emulator with `dumpsys activity activities`.
+- Android back handling lives entirely in `@capacitor/app`; `@capacitor/android` carries none. Without that package back finishes the activity, closing the app even with a dialog open.
+- `AppPlugin`'s `OnBackPressedCallback` fires the `backButton` event only while JavaScript holds a listener for it; registering one removes the default action, so the app must call `App.exitApp()` itself when nothing is open.
+- `main.js` names the App plugin proxy `AppPlugin`, since `App` is already the root Solid component.
+- A `registerPlugin` proxy's `addListener` reaches native through `nativeCallback`, not `nativePromise`, and needs an `addListener` method of rtype `callback` in that plugin's `PluginHeaders`.
 - A category is one lowercase word, since `parseCategories` splits on whitespace. The chip-style category input therefore commits on space, and two-word names are impossible without a storage-format change.
 - In `solid-js/html`, reading a signal inside the expression that renders an `<input>` rebuilds that input on every keystroke and loses what was typed. Draft text has to live in a plain variable outside the reactive graph.
 - `solid-js/html` drops the static whitespace between an element and the expression that follows it, so `<b>${n}</b> ${word}` renders as `1expense`; the space has to be part of the interpolated string.
@@ -102,7 +104,10 @@ _Reference context — observed facts and standing conventions for this project,
 - The sheet's chips are ordered by recency, not by name, and a chip the form just named leads them. Why: the left of a scrolling line is the only part seen without scrolling.
 - Chips selected in the sheet are not pinned to the front. Why: one ordering rule, and pinning makes chips jump position on every tap.
 - A category filter applies to older months as well, so unfolding one while a filter is on shows only its matching rows.
-- The add/edit dialog is a full bottom sheet, and it closes by tapping the dimmed area outside it, discarding silently. Why: back-button dismissal does not exist in a plain browser, where this UI is developed and tested.
+- The add/edit dialog is a full bottom sheet, and it closes by tapping the dimmed area outside it, discarding silently. On the device the back button closes it too; a plain browser has only the dim.
+- The back button closes one overlay at a time, innermost first: delete confirmation, import confirmation, add/edit sheet, settings; with none open it exits the app.
+- Back is device-only: no Escape-key equivalent was added in the browser. Why: the browser has no such button, and the Playwright suite proves the wiring by firing the plugin event.
+- The UI suite's native stand-in keeps the listeners the app registers instead of recording them as calls, and `pressBackButton(page)` in `web/e2e/fixtures.js` invokes the `App:backButton` one. Why: existing native-call assertions stay unchanged.
 - The header shows month, total, expense count and average per day, with no eyebrow label above the month. Why: a label restates the month line and only carries information while filtering.
 - Settings sits behind a gear top-right and closes with a ✕ in the same corner, holding only Export, Import and the version.
 - Sheet animation uses `solid-transition-group`'s `<Transition>`, not a hand-rolled `setTimeout` before unmount. Why: it is the package the Solid project publishes for this, and the duration then lives only in CSS.
@@ -136,13 +141,13 @@ _Reference context — observed facts and standing conventions for this project,
 - Linting is ESLint (flat config, recommended rules) plus Prettier, chosen over Biome and oxlint. Why: Prettier's defaults already matched the hand-written style, so the one-off reformat of `web/` changed only 135 lines across 12 files.
 - Linting is on demand through `just lint`; no build or test recipe runs it. Why: the user asked for a recipe, not a gate.
 - `.prettierrc` at the repository root writes out 2-space indentation, no tabs and an 80-column width although all three are Prettier's defaults. Why: a Prettier upgrade then cannot move them silently.
-- Moneta was ported to Capacitor to stop maintaining the hand-written Java bridge; the back-button listener the port enables is a separate change, not yet made.
+- Moneta was ported to Capacitor to stop maintaining the hand-written Java bridge; the back-button listener the port enabled was added afterwards, through `@capacitor/app`.
 - The port accepted losing every installed copy's `localStorage`, because `file://` and `http://localhost` are different origins. Why: only the author uses the app.
 - The UI suite's native stand-in imitates what the WebView injects — `window.androidBridge`, `Capacitor.PluginHeaders` and `nativePromise` — rather than the app's plugin objects. Why: the plugin proxies then come from Capacitor's own code.
 - The Gradle wrapper that `cap add android` generates is deleted, so the `gradle` pinned by `shell.nix` builds the app, run inside `android/`. Why: one Gradle version, as before the port. Cost: `npx cap run android` cannot be used.
 - The Maestro suite in `maestro/` covers only what a browser cannot — the system file picker, the Share sheet, the back button, the real safe-area insets — plus one smoke flow over the packaged APK.
 - The Maestro flows deliberately do not mirror the Playwright specs. Why: the same proof on device costs minutes per run instead of seconds.
-- `maestro/back-button.yaml` asserts today's defective behaviour, that back closes the app. Why: a device suite that skips the known defect cannot notice when it changes.
+- `maestro/back-button.yaml` is the one place the real button, the real plugin and the real activity meet: the sheet and settings close, and a third back leaves the app.
 - `maestro/safe-area.yaml` proves only that the top and bottom controls are reachable, plus a screenshot in `build/maestro/`. Why: Maestro can assert no element bounds, so the spacing itself stays a human check.
 - `just test-android` starts a headless emulator only when no device is attached, and kills that one on exit with `adb emu kill`. Why: an attached device or an emulator started by hand is the developer's, not the suite's to close.
 - `just test-android` decides whether it owns the `adb` server by probing `/dev/tcp/127.0.0.1/5037` before its first `adb` call, since any `adb` call starts a server itself.
@@ -151,7 +156,6 @@ _Reference context — observed facts and standing conventions for this project,
 
 ## Dead Ends
 
-- ✗ Back-button dismissal for the dialog and settings was abandoned before the Capacitor port, when it needed a Java `onBackPressed` bridge. Capacitor's `App` plugin makes it cheap, but plain-browser use still has no way to close either.
 - ✗ Assigning each category a random colour from the least-used tones was abandoned: it guarantees distinct colours but requires storing the assignments, cleaning them up when a category disappears, and reassigning on import.
 - ✗ Visual directions explored and rejected for this app: greenbar ledger, thermal till roll, coin/ring, dark instrument gauge, and a neo-brutalist bar-chart list.
 - ✗ A `prefers-reduced-motion` rule setting `transition: none` on the sheet was rejected: `Transition` unmounts on `transitionend`, which never fires without a transition. Honouring it needs an `onExit(el, done)` hook.

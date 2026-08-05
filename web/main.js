@@ -9,6 +9,7 @@ import { Transition } from "solid-transition-group";
 // asks the native bridge for them by name; in a browser they stay unused.
 const Filesystem = registerPlugin("Filesystem");
 const Share = registerPlugin("Share");
+const AppPlugin = registerPlugin("App");
 
 export const [expenses, setExpenses] = createStore([]);
 const [editedExpense, setEditedExpense] = createSignal(null);
@@ -26,7 +27,20 @@ const NEW_EXPENSE = "new";
 
 export function main() {
   setExpenses(loadExpenses());
+  // The listener replaces Android's default back action altogether, so with
+  // nothing open the app has to leave itself.
+  if (Capacitor.isNativePlatform())
+    AppPlugin.addListener("backButton", closeTopOverlay);
   render(App, document.getElementById("app"));
+}
+
+// The back button closes one overlay at a time, innermost first.
+function closeTopOverlay() {
+  if (deletedExpense() !== null) setDeletedExpense(null);
+  else if (reviewedImport() !== null) setReviewedImport(null);
+  else if (editedExpense() !== null) setEditedExpense(null);
+  else if (settingsOpen()) setSettingsOpen(false);
+  else AppPlugin.exitApp();
 }
 
 function App() {

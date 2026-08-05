@@ -376,10 +376,12 @@ export class MonetaApp {
 // the plugin headers `registerPlugin` reads to know which calls are native;
 // and `nativePromise`, which every such call goes through. Calls are recorded
 // and answered here, `failNextCallTo` making one plugin's next call fail.
+// Event listeners the app registers are kept so a test can fire the event, as
+// `pressBackButton` does.
 export async function installCapacitorBridge(page) {
   await page.addInitScript(() => {
     window.androidBridge = { postMessage() {} };
-    window.__native = { calls: [], failures: {} };
+    window.__native = { calls: [], failures: {}, listeners: {} };
     window.Capacitor = {
       PluginHeaders: [
         {
@@ -387,7 +389,22 @@ export async function installCapacitorBridge(page) {
           methods: [{ name: "writeFile", rtype: "promise" }],
         },
         { name: "Share", methods: [{ name: "share", rtype: "promise" }] },
+        {
+          name: "App",
+          methods: [
+            { name: "addListener", rtype: "callback" },
+            { name: "exitApp", rtype: "promise" },
+          ],
+        },
       ],
+      // Registering a listener is plumbing, not a call a test reasons about,
+      // so it is kept aside rather than recorded.
+      nativeCallback(plugin, method, options, callback) {
+        if (method === "addListener")
+          window.__native.listeners[plugin + ":" + options.eventName] =
+            callback;
+        else window.__native.calls.push({ plugin, method, options });
+      },
       nativePromise(plugin, method, options) {
         window.__native.calls.push({ plugin, method, options });
         const failure = window.__native.failures[plugin];
@@ -405,6 +422,14 @@ export async function installCapacitorBridge(page) {
 
 export function nativeCalls(page) {
   return page.evaluate(() => window.__native.calls);
+}
+
+// Plays Android's back button, which reaches the app only through the plugin
+// event; a browser has no such button.
+export function pressBackButton(page) {
+  return page.evaluate(() =>
+    window.__native.listeners["App:backButton"]({ canGoBack: false }),
+  );
 }
 
 export function failNextCallTo(page, plugin, message) {
