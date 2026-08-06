@@ -23,6 +23,7 @@ import {
   isSameMonth,
   knownCategories,
   monthKey,
+  parseAmount,
   parseCategories,
   parseExpenses,
   parseIsoDate,
@@ -72,6 +73,18 @@ describe("parseIsoDate", () => {
   test("yields an unparseable date for text that is not one", () => {
     assert.ok(isNaN(parseIsoDate("").getTime()));
     assert.ok(isNaN(parseIsoDate("nonsense").getTime()));
+  });
+
+  // A day the calendar does not hold used to roll into the next month, which
+  // stored a mistyped date as another day without saying so.
+  test("yields an unparseable date for a day the calendar has not got", () => {
+    for (const text of ["2026-02-30", "2026-13-01", "2026-00-10", "2026-2-3"])
+      assert.ok(isNaN(parseIsoDate(text).getTime()), text);
+  });
+
+  test("reads a year before 1000 as that year", () => {
+    assert.equal(toIsoDate(parseIsoDate("0099-05-01")), "0099-05-01");
+    assert.equal(monthKey(parseIsoDate("0999-05-03")), "0999-05");
   });
 });
 
@@ -406,8 +419,8 @@ describe("parseCategories", () => {
     assert.deepEqual(parseCategories("   "), []);
   });
 
-  test("keeps repeated categories", () => {
-    assert.deepEqual(parseCategories("food food"), ["food", "food"]);
+  test("names a repeated category once", () => {
+    assert.deepEqual(parseCategories("food food"), ["food"]);
   });
 });
 
@@ -421,7 +434,48 @@ describe("blankExpenseForm", () => {
   });
 });
 
+// The field is text, not a number input: a number input drops a typed decimal
+// comma silently, turning 12,50 into 1250.
+describe("parseAmount", () => {
+  test("takes a plain decimal written with either separator", () => {
+    assert.equal(parseAmount("12.50"), 12.5);
+    assert.equal(parseAmount("12,50"), 12.5);
+    assert.equal(parseAmount("12"), 12);
+    assert.equal(parseAmount(" 12.50 "), 12.5);
+    assert.equal(parseAmount(".5"), 0.5);
+  });
+
+  test("answers with no amount for text that is not one", () => {
+    for (const typed of [
+      "",
+      "   ",
+      ".",
+      "12abc",
+      "1.2.3",
+      "12 50",
+      "-5",
+      "1e5",
+    ])
+      assert.equal(Number.isNaN(parseAmount(typed)), true, `typed ${typed}`);
+  });
+
+  test("rounds what was typed to whole cents", () => {
+    assert.equal(parseAmount("1.234"), 1.23);
+    assert.equal(parseAmount("1.236"), 1.24);
+  });
+});
+
 describe("formFromExpense", () => {
+  // Every stored amount has to come back as text the field can take again,
+  // which rules out the exponent form String() gives a very small number.
+  test("writes the amount in cents, which parseAmount takes back", () => {
+    for (const amount of [12.5, 12, 0.0000005, 1234.567]) {
+      const text = formFromExpense(anExpense({ amount })).amount;
+      assert.equal(text, amount.toFixed(2), `amount ${amount}`);
+      assert.equal(Number.isNaN(parseAmount(text)), false, `amount ${amount}`);
+    }
+  });
+
   test("renders an expense as editable text and its categories", () => {
     const form = formFromExpense({
       id: 1,
@@ -430,7 +484,7 @@ describe("formFromExpense", () => {
       date: new Date(2026, 1, 12),
       categories: ["food", "shopping"],
     });
-    assert.equal(form.amount, "12.5");
+    assert.equal(form.amount, "12.50");
     assert.equal(form.description, "Groceries");
     assert.deepEqual(form.categories, ["food", "shopping"]);
     assert.equal(form.date, "2026-02-12");
@@ -508,6 +562,22 @@ describe("expenseError", () => {
         `amount ${amount}`,
       );
     }
+  });
+
+  // Beyond this the app cannot print the figure: formatCurrency falls back to
+  // the exponent form, which carries no thousands and no cents.
+  test("rejects an amount too large to be printed as money", () => {
+    assert.equal(
+      expenseError({ ...validExpense(), amount: 1e21 }),
+      "Invalid amount.",
+    );
+    assert.equal(expenseError({ ...validExpense(), amount: 1e9 }), null);
+  });
+
+  // Cents are a rule of the form, not of the data: a file written elsewhere
+  // may hold a finer amount, and refusing it would refuse the whole file.
+  test("accepts an amount finer than a cent, as a file can hold", () => {
+    assert.equal(expenseError({ ...validExpense(), amount: 12.345 }), null);
   });
 
   test("rejects a missing or blank description", () => {
@@ -678,6 +748,20 @@ describe("stored JSON format", () => {
     null,
     2,
   );
+
+  // "NaN-NaN-NaN" is what an invented date looked like: written back, it made
+  // the file it came from impossible to import again.
+  test("writes back a date it could not read as no date at all", () => {
+    const [expense] = parseExpenses(
+      JSON.stringify([{ id: 1, amount: 5, description: "Bus" }]),
+    );
+    const [written] = JSON.parse(serializeExpenses([expense]));
+    assert.equal(written.date, null);
+    assert.equal(
+      isNaN(parseExpenses(serializeExpenses([expense]))[0].date),
+      true,
+    );
+  });
 
   test("parses a stored date as that calendar day in local time", () => {
     const [expense] = parseExpenses(storedJson);

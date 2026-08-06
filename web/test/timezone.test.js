@@ -83,6 +83,29 @@ for (const zone of ZONES) {
   }
 }
 
+// Where the clock jumps forward at midnight there is no such instant as the
+// beginning of that day, so a heading that compares days by timestamp misses
+// it. Every one of these is the day after a midnight jump.
+describe("where the clock jumps at midnight", () => {
+  const JUMPS = [
+    { zone: "America/Santiago", parts: [2024, 8, 8, 12, 0] },
+    { zone: "Asia/Beirut", parts: [2024, 2, 31, 12, 0] },
+    { zone: "America/Havana", parts: [2025, 2, 9, 12, 0] },
+  ];
+
+  for (const { zone, parts } of JUMPS) {
+    test(`names yesterday in ${zone}`, () => {
+      atLocalTime(zone, parts, () => {
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        assert.equal(formatDay(today, today), "Today");
+        assert.equal(formatDay(yesterday, today), "Yesterday");
+      });
+    });
+  }
+});
+
 // Node reads TZ on each date operation, so the zone can change inside a
 // process; the clock is fixed as well, since the hours that expose a UTC slip
 // are rarely the hours a test suite runs at.

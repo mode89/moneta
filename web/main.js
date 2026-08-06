@@ -34,8 +34,14 @@ export function main() {
 // The back button closes one overlay at a time, innermost first.
 function closeTopOverlay() {
   const open = overlays();
-  if (open.length === 0) AppPlugin.exitApp();
-  else setOverlays(open.slice(0, -1));
+  if (open.length > 0) setOverlays(open.slice(0, -1));
+  else if (!overlayOnScreen()) AppPlugin.exitApp();
+}
+
+// An overlay leaves the stack at once but stays drawn while it slides away, so
+// a press in that moment is still aimed at it rather than at the app.
+function overlayOnScreen() {
+  return document.querySelector(".sheet-layer, .cover-layer") !== null;
 }
 
 function App() {
@@ -57,7 +63,7 @@ function App() {
 // stays on the current month even while an older one is unfolded below.
 function MonthSummary() {
   const monthly = createMemo(() =>
-    visibleExpenses().filter((expense) => isSameMonth(expense.date, now())),
+    filterByCategory(currentMonthExpenses(), activeCategory()),
   );
   const total = createMemo(() => totalOf(monthly()));
   const perDay = createMemo(() => {
@@ -98,11 +104,7 @@ function MonthSummary() {
 // One chip per category spent on this month, largest first. Tapping filters
 // the whole list; tapping the selected one clears the filter.
 function CategoryLegend() {
-  const totals = createMemo(() =>
-    categoryTotals(
-      expenses.filter((expense) => isSameMonth(expense.date, now())),
-    ),
-  );
+  const totals = createMemo(() => categoryTotals(currentMonthExpenses()));
   return html`
     <div class="legend">
       <${For} each=${totals}>
@@ -249,6 +251,8 @@ function Amount(props) {
 // The one sheet behind adding and editing. `mode="outin"` makes a reopened
 // sheet wait for the leaving one, so only ever one is in the page.
 function EditedExpenseSheet() {
+  const addedExpense = createMemo(() => overlayOf("newExpense"));
+  const editedExpense = createMemo(() => overlayOf("editExpense"));
   return html`
     <${Transition}
       name="sheet"
@@ -257,15 +261,17 @@ function EditedExpenseSheet() {
       onExit=${settleTransition}
     >
       ${() => {
-        const added = overlayOf("newExpense");
-        if (added)
+        // Read through memos over the two overlays this sheet answers to, not
+        // the stack: opening the delete card over it would otherwise rebuild
+        // the sheet and lose what the user had typed.
+        if (addedExpense())
           return html`<${ExpenseSheet}
             title="Add an expense"
             submitLabel="Save expense"
             initial=${blankExpenseForm()}
             actions=${newExpenseActions()}
           />`;
-        const edited = overlayOf("editExpense");
+        const edited = editedExpense();
         if (!edited) return null;
         return html`<${ExpenseSheet}
           title="Edit expense"
@@ -300,13 +306,13 @@ function ExpenseSheet(props) {
         <div class="grab"></div>
         <h3>${() => props.title}</h3>
         <label class="flabel" for="expense-amount">Amount</label>
+        <!-- text, not number: a number field drops a typed decimal comma -->
         <input
           class="in big"
           id="expense-amount"
-          type="number"
+          type="text"
           inputmode="decimal"
           placeholder="0.00"
-          step="0.01"
           value=${() => form.amount}
           onInput=${updateField("amount")}
         />
@@ -359,11 +365,18 @@ function CategoryPicker(props) {
     draftCategory = "";
     setNamingCategory(true);
   };
+  // Every name the field holds, since a pasted line can carry several and
+  // parseCategories sorts them.
   const commitDraft = () => {
-    const [name] = parseCategories(draftCategory);
+    const names = parseCategories(draftCategory);
+    draftCategory = "";
     setNamingCategory(false);
-    if (name && !props.chosen.includes(name)) props.actions.toggle(name);
+    for (const name of names)
+      if (!props.chosen.includes(name)) props.actions.toggle(name);
   };
+  // Pressing a chip must not move focus: the blur would commit the draft and
+  // rebuild this row under the finger, and the tap would land on nothing.
+  const keepFocus = (event) => event.preventDefault();
   const draftKey = (event) => {
     if (event.key === " " || event.key === "Enter") {
       event.preventDefault();
@@ -380,6 +393,7 @@ function CategoryPicker(props) {
         ${(name) => html`
           <button
             class=${() => "chip" + (props.chosen.includes(name) ? " on" : "")}
+            onMouseDown=${keepFocus}
             onClick=${() => props.actions.toggle(name)}
           >
             <i style=${{ background: categoryInk(name) }}></i>
@@ -400,8 +414,8 @@ function CategoryPicker(props) {
     </div>`;
 }
 
-// Deleting names the expense that will go, and takes the place of the sheet
-// it was asked for from.
+// Deleting names the expense that will go, and sits over the sheet it was
+// asked for from, which is left as it was if the deletion is refused.
 function DeleteConfirmation() {
   return () => {
     const overlay = overlayOf("deleteExpense");
@@ -414,8 +428,9 @@ function DeleteConfirmation() {
       confirmLabel="Delete"
       actions=${{
         confirm: () => {
-          deleteExpense(overlay.id);
           closeOverlay("deleteExpense");
+          closeOverlay("editExpense");
+          deleteExpense(overlay.id);
         },
         cancel: () => closeOverlay("deleteExpense"),
       }}
@@ -492,8 +507,9 @@ function SettingsScreen() {
     </div>`;
 }
 
-// Nothing is replaced until this card is confirmed, and confirming leaves
-// settings as well, since the list behind it has changed.
+// Nothing is replaced until this card is confirmed. A file that is taken
+// leaves settings as well, since the list behind it has changed; a file that
+// is refused leaves settings open, where the user asked for it.
 function ImportConfirmation() {
   return () => {
     const review = overlayOf("importConfirmation");
@@ -506,8 +522,7 @@ function ImportConfirmation() {
       actions=${{
         confirm: () => {
           closeOverlay("importConfirmation");
-          closeOverlay("settings");
-          replaceExpenses(review.expenses);
+          if (replaceExpenses(review.expenses)) closeOverlay("settings");
         },
         cancel: () => closeOverlay("importConfirmation"),
       }}
@@ -557,7 +572,6 @@ function editExpenseActions(id) {
       closeOverlay("editExpense");
     },
     remove() {
-      closeOverlay("editExpense");
       openOverlay({ kind: "deleteExpense", id });
     },
     close: () => closeOverlay("editExpense"),
@@ -582,9 +596,15 @@ function visibleExpenses() {
   return filterByCategory(expenses, activeCategory());
 }
 
-// Ids are creation timestamps; groupByDay orders a day's expenses by them.
+function currentMonthExpenses() {
+  return expenses.filter((expense) => isSameMonth(expense.date, now()));
+}
+
 export function addExpense(expense) {
-  setExpenses((expenses) => [...expenses, { id: now().getTime(), ...expense }]);
+  setExpenses((expenses) => [
+    ...expenses,
+    { id: nextId(expenses), ...expense },
+  ]);
   saveExpenses(expenses);
 }
 
@@ -592,20 +612,43 @@ export function updateExpense(id, expense) {
   setExpenses((expenses) =>
     expenses.map((each) => (each.id === id ? { id, ...expense } : each)),
   );
+  dropVanishedFilter();
   saveExpenses(expenses);
 }
 
 export function deleteExpense(id) {
   setExpenses((expenses) => expenses.filter((expense) => expense.id !== id));
+  dropVanishedFilter();
   saveExpenses(expenses);
+}
+
+// Ids are creation timestamps, which groupByDay orders a day by; two saved in
+// the same millisecond would otherwise share one.
+function nextId(expenses) {
+  const stamp = now().getTime();
+  const highest = expenses.reduce((max, each) => Math.max(max, each.id), 0);
+  return stamp > highest ? stamp : highest + 1;
+}
+
+// The chip is the only way to clear a filter, so a filter that outlived the
+// last expense carrying it would narrow the list with nothing left to tap.
+function dropVanishedFilter() {
+  const name = activeCategory();
+  if (!name) return;
+  const carried = currentMonthExpenses().some((expense) =>
+    expense.categories.includes(name),
+  );
+  if (!carried) setActiveCategory(null);
 }
 
 // Returns an error message for an invalid expense, or null.
 export function expenseError(expense) {
-  // Number.isFinite, not isNaN: an imported file can carry the amount as text.
-  if (!Number.isFinite(expense.amount) || expense.amount <= 0)
+  if (!isPrintableAmount(expense.amount) || expense.amount <= 0)
     return "Invalid amount.";
-  if (!expense.description || expense.description.trim() === "")
+  if (
+    typeof expense.description !== "string" ||
+    expense.description.trim() === ""
+  )
     return "Description cannot be empty.";
   if (isNaN(expense.date.getTime())) return "Invalid date.";
   if (beginningOfDay(expense.date).getTime() > now().getTime())
@@ -624,22 +667,47 @@ export function blankExpenseForm() {
   };
 }
 
+// The amount in cents, which is the text the field takes back; String() would
+// give the exponent form for a very small one. A field the app cannot read at
+// all starts empty, so that the sheet can repair the record rather than show
+// it as NaN.
 export function formFromExpense(expense) {
   return {
-    amount: String(expense.amount),
-    description: expense.description,
-    date: toIsoDate(expense.date),
+    amount: Number.isFinite(expense.amount) ? expense.amount.toFixed(2) : "",
+    description: String(expense.description ?? ""),
+    date: isReadableDate(expense.date) ? toIsoDate(expense.date) : "",
     categories: [...expense.categories],
   };
 }
 
 export function expenseFromForm(form) {
   return {
-    amount: parseFloat(form.amount),
+    amount: parseAmount(form.amount),
     description: form.description.trim(),
     date: parseIsoDate(form.date),
     categories: [...form.categories],
   };
+}
+
+// Either separator, since a device keyboard offers whichever its locale
+// prefers, and cents, which are as fine as the app draws an amount.
+export function parseAmount(text) {
+  const typed = String(text).trim();
+  if (!/^\d*[.,]?\d*$/.test(typed) || !/\d/.test(typed)) return NaN;
+  return roundToCents(Number(typed.replace(",", ".")));
+}
+
+function roundToCents(amount) {
+  return Math.round(amount * 100) / 100;
+}
+
+// Beyond this range toFixed gives the exponent form, which carries neither
+// thousands nor cents. Number.isFinite, not isNaN: an imported file can carry
+// the amount as text.
+function isPrintableAmount(amount) {
+  return (
+    Number.isFinite(amount) && Number.isSafeInteger(Math.round(amount * 100))
+  );
 }
 
 export function deleteMessage(expense) {
@@ -673,6 +741,9 @@ function downloadFile(filename, json) {
   URL.revokeObjectURL(url);
 }
 
+// What the Share plugin rejects with when the user closes the sheet.
+const SHARE_DISMISSED = ["Share canceled", "Share cancelled"];
+
 // Android offers no Save-As dialog, so the file is written to the cache
 // directory and handed to the system share sheet. The directory and encoding
 // are the plain strings the Directory and Encoding enums hold.
@@ -687,8 +758,9 @@ async function shareExport(filename, json) {
     await Share.share({ title: filename, url: uri });
   } catch (e) {
     // Dismissing the share sheet rejects the call; that is not a failure.
-    if (e.message !== "Share canceled")
-      alert("Failed to export expenses: " + e.message);
+    const message = e?.message ?? String(e);
+    if (!SHARE_DISMISSED.includes(message))
+      alert("Failed to export expenses: " + message);
   }
 }
 
@@ -701,6 +773,7 @@ function importExpenses() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (event) => reviewImport(event.target.result, file.name);
+    reader.onerror = () => alert("Failed to read " + file.name + ".");
     reader.readAsText(file);
   };
   input.click();
@@ -719,16 +792,21 @@ function reviewImport(json, filename) {
   openOverlay({ kind: "importConfirmation", filename, expenses: imported });
 }
 
-// Importing discards the expenses already on the device.
+// Importing discards the expenses already on the device. It answers whether
+// the file was taken, since a refused file changes nothing at all.
 export function replaceExpenses(imported) {
   const errors = imported.map(importedExpenseError).filter((e) => e !== null);
+  const ids = new Set(imported.map((expense) => expense.id));
+  if (ids.size < imported.length)
+    errors.push("Two expenses share an ID; editing one would change both.");
   if (errors.length > 0) {
     alert("File contains errors.");
     errors.forEach((error) => console.error(error));
-    return;
+    return false;
   }
   setExpenses(imported);
-  saveExpenses(imported);
+  dropVanishedFilter();
+  return saveExpenses(imported);
 }
 
 // Returns an error message for an invalid imported expense, or null.
@@ -737,14 +815,31 @@ export function importedExpenseError(expense) {
   return expenseError(expense);
 }
 
+// Storage the app cannot read at all leaves it empty and says so, rather than
+// throwing before anything is drawn. Nothing is deleted: what is unreadable
+// stays where it is until the user saves over it.
 export function loadExpenses() {
   const stored = localStorage.getItem("expenses");
-  return stored ? parseExpenses(stored) : [];
+  if (!stored) return [];
+  try {
+    return parseExpenses(stored);
+  } catch (e) {
+    alert("Could not read the expenses on this device: " + e.message);
+    return [];
+  }
 }
 
+// Answers whether it wrote: losing an expense in silence is the worst thing
+// the app can do, and an import must not call itself done on a refused write.
 export function saveExpenses(expenses) {
-  localStorage.setItem("expenses", serializeExpenses(expenses));
+  try {
+    localStorage.setItem("expenses", serializeExpenses(expenses));
+  } catch {
+    alert("Could not save: the storage on this device is full or unavailable.");
+    return false;
+  }
   noticeSaved();
+  return true;
 }
 
 let noticeTimer = null;
@@ -755,35 +850,55 @@ function noticeSaved() {
   noticeTimer = setTimeout(() => setSaveNotice(null), 3000);
 }
 
+// An entry that is not an expense at all is passed over, so that one of them
+// cannot cost the expenses beside it.
 export function parseExpenses(json) {
-  return JSON.parse(json).map((expense) => ({
-    ...expense,
-    date: parseIsoDate(expense.date),
-    // Through parseCategories, not a plain sort: files written by the
-    // ClojureScript version hold [""] where an expense has no category.
-    categories: parseCategories((expense.categories ?? []).join(" ")),
-  }));
+  const parsed = JSON.parse(json);
+  if (!Array.isArray(parsed)) throw new Error("It holds no list of expenses.");
+  return parsed
+    .filter((expense) => expense && typeof expense === "object")
+    .map((expense) => ({
+      ...expense,
+      date: parseIsoDate(expense.date),
+      // Through parseCategories, not a plain sort: files written by the
+      // ClojureScript version hold [""] where an expense has no category.
+      categories: parseCategories(categoryText(expense.categories)),
+    }));
 }
 
+// The list the app writes, or the single name a hand-written file may carry.
+function categoryText(categories) {
+  if (Array.isArray(categories)) return categories.map(String).join(" ");
+  return categories == null ? "" : String(categories);
+}
+
+// A date it could not read is written back as none: an invented day would
+// make the file impossible to read again.
 export function serializeExpenses(expenses) {
   const stored = expenses.map((expense) => ({
     ...expense,
-    date: toIsoDate(expense.date),
+    date: isReadableDate(expense.date) ? toIsoDate(expense.date) : null,
   }));
   return JSON.stringify(stored, null, 2);
+}
+
+function isReadableDate(date) {
+  return date instanceof Date && !isNaN(date.getTime());
 }
 
 export function findExpense(id) {
   return expenses.find((expense) => expense.id === id);
 }
 
+// One name is one category however often a file repeats it: a repeat would
+// count that expense twice in the category totals.
 export function parseCategories(input) {
-  return input
+  const named = input
     .trim()
     .split(/\s+/)
     .filter((category) => category !== "")
-    .map((category) => category.toLowerCase())
-    .sort();
+    .map((category) => category.toLowerCase());
+  return [...new Set(named)].sort();
 }
 
 // Every category the user has ever used, the most recently spent on first and
@@ -885,14 +1000,23 @@ export function categoryInk(name) {
 // Built from local parts, since `new Date("YYYY-MM-DD")` reads the text as UTC
 // midnight and would shift the day west of the meridian.
 export function parseIsoDate(text) {
-  const [year, month, day] = String(text).split("-").map(Number);
-  return new Date(year, month - 1, day);
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(text));
+  if (!parts) return new Date(NaN);
+  const [year, month, day] = parts.slice(1).map(Number);
+  const date = new Date(year, month - 1, day);
+  // Two-digit years mean the 1900s to the Date constructor alone.
+  date.setFullYear(year);
+  // A day the calendar does not hold rolls into the next month rather than
+  // failing, so a mistyped date would be stored as another day.
+  if (date.getMonth() !== month - 1 || date.getDate() !== day)
+    return new Date(NaN);
+  return date;
 }
 
 // The stored and exported JSON carry this format; changing it strands the
 // expenses already on users' devices.
 export function toIsoDate(date) {
-  const year = date.getFullYear();
+  const year = String(date.getFullYear()).padStart(4, "0");
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return year + "-" + month + "-" + day;
@@ -915,13 +1039,13 @@ export function formatDate(date) {
   );
 }
 
+// Compared by calendar parts, not by timestamp: where the clock jumps at
+// midnight there is no beginning of the day to compare.
 export function formatDay(date, reference) {
-  const day = beginningOfDay(date).getTime();
-  const today = beginningOfDay(reference);
-  if (day === today.getTime()) return "Today";
-  const yesterday = new Date(today);
+  if (isSameDay(date, reference)) return "Today";
+  const yesterday = new Date(reference);
   yesterday.setDate(yesterday.getDate() - 1);
-  if (day === yesterday.getTime()) return "Yesterday";
+  if (isSameDay(date, yesterday)) return "Yesterday";
   return formatDate(date);
 }
 
@@ -955,6 +1079,10 @@ export function averagePerDay(total, month, reference) {
     ? reference.getDate()
     : new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
   return total / days;
+}
+
+export function isSameDay(date, other) {
+  return isSameMonth(date, other) && date.getDate() === other.getDate();
 }
 
 export function isSameMonth(date, other) {

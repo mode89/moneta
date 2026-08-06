@@ -17,6 +17,8 @@ _Reference context — observed facts and standing conventions for this project,
 - Computed-style sampling of an animation runs as an in-page `requestAnimationFrame` recorder keeping the frames where the drawn state changed. Why: it is the sampler that catches both ends of a 170ms transition.
 - A view with no suite coverage yet is checked by a throwaway Node script that seeds `localStorage`, fixes the clock and screenshots each state. Why: it sees what a locator assertion cannot.
 - Long-running commands are given an explicit timeout. Why: a `nix-shell --run` that hung on a background server ran for 147 seconds before the user aborted it. How to apply: suite runs, builds, and anything that starts a server.
+- Review findings are challenged by a second round of agents before anything is fixed. Why: of 18 claims, one was refuted outright and five were narrowed once each was re-tested. How to apply: any multi-agent review.
+- A defect fix starts with a test that fails for that defect. Why: a first round of fixes left 15 of 18 changes revertible with both suites still green. How to apply: review findings as much as reported bugs.
 - Local test runs are made without asking the user first: `scripts/dev` commands, the `web/e2e` server and throwaway browser scripts alike. Why: the user gave this standing permission and restated it after a test command was queued for confirmation.
 - Test and lint tool calls are marked safe, so the harness does not queue them for approval. Why: the user asked for it mid-session, after `scripts/dev test` and `scripts/dev lint` runs were held for confirmation.
 - The UI suite reaches the app through `web/e2e/fixtures.js`, where locators live on the `MonetaApp` page object. Why: the app has no test hooks, so its markup is described in one place. How to apply: add locators there, not in a spec.
@@ -54,7 +56,11 @@ _Reference context — observed facts and standing conventions for this project,
 - `scripts/dev build-web` and `web/e2e/server.js` copy and serve `bootstrap.css`, `file_download.svg` and `file_upload.svg`, which `web/index.html` no longer references.
 - Export files written by the ClojureScript version carry `"categories": [""]` for an uncategorised expense, since it split the empty form field on whitespace without filtering.
 - Importing such a file drew a nameless chip in the header legend, which renders one chip per distinct category name; `parseExpenses` now drops the blank.
-- Two expenses added within the same millisecond receive the same `id`, after which `updateExpense` and `deleteExpense` act on both. Tapping the button cannot reach this; programmatic callers and tests can.
+- Chrome's `input type="number"` drops a typed decimal comma: typing `12,50` leaves the field value `"1250"`, a silent hundredfold error. No money field in this app can be a number input.
+- In `solid-js/html`, a component expression that reads the whole `overlays()` signal is rebuilt whenever any overlay is pushed: opening the delete card rebuilt the sheet and discarded what the user had typed. A memo per overlay kind avoids it.
+- `beginningOfDay` cannot compare days where the clock jumps at midnight: America/Santiago, Asia/Beirut and America/Havana have no midnight on the jump day, so `formatDay` compares calendar parts instead.
+- The UI suite fixes the clock, so anything in `main.js` that measures elapsed time through `now()` measures zero there: a back-button guard written that way could never let the app exit.
+- Playwright's visibility passes for an overlay that is leaving, since the element stays in the page for its exit transition; `app.settled()` in `web/e2e/fixtures.js` waits for the enter and exit classes to go.
 - `playwright-cli click` against this app reports "performing click action" and then stalls without the click taking effect. Driving the DOM through `playwright-cli eval` with `element.click()` works reliably.
 - `playwright-cli upload` fails on the import flow with "can only be used when there is related modal state present", because the `<input type=file>` is created and clicked programmatically.
 - Import can be driven in-page by patching `HTMLInputElement.prototype.click` to set `files` from a `DataTransfer` holding a `File`, then dispatching `change`.
@@ -112,6 +118,15 @@ _Reference context — observed facts and standing conventions for this project,
 - A category's colour is `inks[hash(name) % 6]`, derived at render time and never stored. Why: `localStorage` and the export file stay exactly as they are, and a category's colour never drifts between devices.
 - Colour picking is not offered and no colour is stored. Why: with six inks two categories collide about 44% of the time at four categories and 91% at five, and the design accepts collisions since the name sits beside every dot.
 - Amounts always start blurred and one tap reveals them all until the app closes; no preference is persisted. Why: it keeps the app storing nothing but expenses.
+- The amount field is `type="text"` with `inputmode="decimal"`, read by a strict `parseAmount` that takes either decimal separator. Why: a number field drops a typed comma, storing 12,50 as 1250.
+- Whole cents are a rule of the entry form, not of the data: `parseAmount` rounds what is typed, while `expenseError` accepts a finer amount. Why: refusing one would refuse a whole imported file.
+- `formFromExpense` writes the amount with `toFixed(2)`. Why: `String()` gives the exponent form for a very small amount, which `parseAmount` refuses, so that expense could not be edited at all.
+- Loading never deletes: a stored record the app cannot draw stays in storage, is shown, and can be repaired in the sheet, which starts a field it cannot read empty.
+- `serializeExpenses` writes a date it could not read as `null`. Why: the earlier `"NaN-NaN-NaN"` was an invented day, and it made the file it came from impossible to import again.
+- `saveExpenses` answers whether it wrote, and `replaceExpenses` passes that answer on. Why: an import whose write was refused otherwise closed settings as though it had succeeded.
+- New ids are the clock, or one past the highest existing id when the clock is not ahead of it. Why: two expenses saved in the same millisecond shared an id, and same-day order relies on ids rising.
+- `parseCategories` names a repeated category once. Why: a repeat in a file counted that expense twice in the category totals, against a month total that counted it once.
+- An import whose expenses share an id is refused rather than renumbered. Cost: an export written before ids were made collision-free can hold a duplicate and is then unusable.
 - The list is unboxed — rows on paper divided by hairline rules — with the current month open and earlier months folded to one line carrying that month's count and total, refolded on every launch.
 - Day headings read "Today"/"Yesterday" only inside the open month and plain dates elsewhere; the header total stays on the current month while an older month is unfolded.
 - Category chips under the header act as filters, narrowing the header total, the average per day and the fold lines, with no status line naming the active filter.
@@ -122,6 +137,8 @@ _Reference context — observed facts and standing conventions for this project,
 - A category filter applies to older months as well, so unfolding one while a filter is on shows only its matching rows.
 - The add/edit dialog is a full bottom sheet, and it closes by tapping the dimmed area outside it, discarding silently. On the device the back button closes it too; a plain browser has only the dim.
 - The back button closes one overlay at a time, innermost first: delete confirmation, import confirmation, add/edit sheet, settings; with none open it exits the app.
+- The delete confirmation stacks over the edit sheet rather than replacing it, so refusing it returns to the sheet with the edit under way intact.
+- Back exits only when no overlay element is still drawn, which `closeTopOverlay` asks of the DOM (`.sheet-layer`, `.cover-layer`). Why: an overlay leaves the stack before its exit transition ends.
 - One `overlays` stack signal replaced the four signals that named each overlay separately. Why: the back button then pops the last, rather than a four-branch cascade restating the order `App` already renders in.
 - Back is device-only: no Escape-key equivalent was added in the browser. Why: the browser has no such button, and the Playwright suite proves the wiring by firing the plugin event.
 - The UI suite's native stand-in keeps the listeners the app registers instead of recording them as calls, and `pressBackButton(page)` in `web/e2e/fixtures.js` invokes the `App:backButton` one. Why: existing native-call assertions stay unchanged.
@@ -184,6 +201,10 @@ _Reference context — observed facts and standing conventions for this project,
 - ✗ A `prefers-reduced-motion` rule setting `transition: none` on the sheet was once rejected because `Transition` unmounts on `transitionend`, which never fires without a transition. `settleTransition` has since removed that blocker.
 - ✗ Making settings a side panel over a permanently dimmed strip of the app was weighed and refused: it stops covering the app, which `web/e2e/settings.spec.js` asserts, and re-opens the back-button behaviour.
 - ✗ A "Discard this expense?" confirmation on closing the add/edit dialog was designed and then dropped as noise for what is usually an empty form.
+- ✗ Dropping stored records the app cannot draw was abandoned: the next save wrote the shortened list back, so a record left out of the view was erased from the device.
+- ✗ Deriving the effective category filter from the current month, rather than clearing the signal, was abandoned: the filter revived when the category came back, and older months stopped being filtered.
+- ✗ A timer-based back-button guard, a `performance.now` stamp plus a 250 ms window, was abandoned for asking the DOM what is still drawn: it needed a magic number.
+- ✗ Matching `/cancel/i` on a Share rejection was abandoned: it swallows any error whose text contains "cancel", so an explicit list of the plugin's own messages replaced it.
 - ✗ direnv with `scripts/` on `PATH` as the command front door was rejected: direnv is not used here, and `test` and `install` collide with a shell builtin and a coreutils binary.
 - ✗ Prerequisite de-duplication, the last claimed advantage of `just` here, was abandoned as a requirement: the `justfile`'s `build: build-web build-android` declared an edge that `build-android` already carried through `sync`.
 - ✗ A Makefile was rejected as the development front door: it passes arguments only as `ARGS=`.
@@ -196,7 +217,7 @@ _Reference context — observed facts and standing conventions for this project,
 - ? Whether to self-host Fraunces and DM Sans rather than fetch them from Google Fonts is undecided; as it stands the app needs the network for its typefaces.
 - ? Whether the sheet's `+ new` chip should become a typeahead that filters the offered chips is undecided; it is the only option weighed that scales past a scrolling line, and costs a filtered memo plus new tests.
 - ? No screen totals a category across months; the header chips are per-month only.
-- ? Whether expense ids should stop being raw creation timestamps is undecided. A collision-free scheme has to preserve same-day sort order, which currently relies on ids increasing with creation time.
+- ? Whether an import whose expenses share an id should renumber them rather than refuse the file is undecided.
 - ? Whether the safe-area padding lands at the right size is unverified; `maestro/safe-area.yaml` shows only that the edge controls are reachable, and the screenshot needs a human eye.
 - ? Whether the shared export file is usable in a receiving app is unverified; the Maestro flow stops at the chooser, which reports "Sharing 1 file" and the `moneta-YYYY-MM-DD.json` name.
 - ? Why the first `scripts/dev test-android` run after the port exited 1 is unexplained; the two runs after it passed, so it is untriaged flakiness rather than a known defect.

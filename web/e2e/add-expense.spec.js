@@ -21,14 +21,15 @@ test.describe("adding an expense", () => {
   test("labels its fields", async ({ app, page }) => {
     await app.openNewExpense();
 
-    await expect(page.getByLabel("Amount")).toHaveAttribute("type", "number");
+    // Text, not number: a number field drops a typed decimal comma silently.
+    await expect(page.getByLabel("Amount")).toHaveAttribute("type", "text");
     await expect(page.getByLabel("Description")).toHaveAttribute(
       "type",
       "text",
     );
     await expect(page.getByLabel("Date")).toHaveAttribute("type", "date");
     await expect(app.amountInput).toHaveAttribute("placeholder", "0.00");
-    await expect(app.amountInput).toHaveAttribute("step", "0.01");
+    await expect(app.amountInput).toHaveAttribute("inputmode", "decimal");
   });
 
   test("lists the saved expense under today", async ({ app }) => {

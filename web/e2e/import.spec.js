@@ -194,7 +194,7 @@ test.describe("importing expenses", () => {
     rejectsOnSight(
       "is JSON but not a list",
       json({ id: 1 }),
-      "Failed to import expenses: JSON.parse(...).map is not a function",
+      "Failed to import expenses: It holds no list of expenses.",
     );
 
     const rejectsOnImport = (name, content) =>

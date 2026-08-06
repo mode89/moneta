@@ -75,6 +75,22 @@ describe("addExpense", () => {
     assert.equal(typeof expenses[0].id, "number");
   });
 
+  // Ids are creation timestamps, so two expenses saved inside one millisecond
+  // would share one, and deleting either would delete both.
+  test("gives two expenses saved in the same millisecond different ids", () => {
+    mock.timers.enable({
+      apis: ["Date"],
+      now: new Date(2026, 1, 12).getTime(),
+    });
+    try {
+      addExpense(filledIn({ description: "First" }));
+      addExpense(filledIn({ description: "Second" }));
+    } finally {
+      mock.timers.reset();
+    }
+    assert.notEqual(expenses[0].id, expenses[1].id);
+  });
+
   test("keeps earlier expenses", () => {
     addExpense(filledIn({ description: "First" }));
     addExpense(filledIn({ description: "Second" }));
@@ -186,6 +202,92 @@ describe("loadExpenses", () => {
     assert.equal(loaded[0].amount, 12.5);
     assert.equal(toIsoDate(loaded[0].date), "2026-02-12");
   });
+
+  // Storage the app cannot read at all used to throw out of `main`, before
+  // anything was rendered, leaving a blank page with no way back.
+  test("starts empty and says so when the stored text is unreadable", () => {
+    for (const stored of ["not json", "{}", "123", "null"]) {
+      storage.set("expenses", stored);
+      alerts.length = 0;
+      assert.deepEqual(loadExpenses(), [], stored);
+      assert.equal(alerts.length, 1, stored);
+    }
+  });
+
+  // Nothing a user wrote is thrown away for the sake of the ones beside it.
+  test("keeps the expenses beside an entry that is not one", () => {
+    storage.set(
+      "expenses",
+      JSON.stringify([expense({ id: 1 }), null, expense({ id: 2 })]),
+    );
+    assert.deepEqual(
+      loadExpenses().map((each) => each.id),
+      [1, 2],
+    );
+  });
+
+  test("keeps a record it cannot draw, rather than deleting it", () => {
+    const undrawable = { id: 3, description: "Bus", categories: [] };
+    storage.set("expenses", JSON.stringify([expense({ id: 1 }), undrawable]));
+
+    const loaded = loadExpenses();
+
+    assert.deepEqual(
+      loaded.map((each) => each.id),
+      [1, 3],
+    );
+    setExpenses(loaded);
+    saveExpenses(loaded);
+    assert.deepEqual(
+      JSON.parse(storedExpenses()).map((each) => each.id),
+      [1, 3],
+    );
+  });
+});
+
+describe("saveExpenses", () => {
+  const refuseToWrite = () => {
+    const working = globalThis.localStorage.setItem;
+    globalThis.localStorage.setItem = () => {
+      throw new Error("QuotaExceededError");
+    };
+    return () => (globalThis.localStorage.setItem = working);
+  };
+
+  test("answers that it wrote, and raises the Saved notice", () => {
+    assert.equal(saveExpenses([]), true);
+  });
+
+  // Losing an expense in silence is the worst thing this app can do, so a
+  // refused write is said out loud and answered for.
+  test("reports a refused write instead of throwing", () => {
+    mock.timers.enable({ apis: ["setTimeout"] });
+    // An earlier save leaves the notice up, and it has to stay down here.
+    saveExpenses([]);
+    mock.timers.tick(3000);
+    alerts.length = 0;
+    const restore = refuseToWrite();
+    try {
+      assert.equal(saveExpenses([]), false);
+      assert.equal(alerts.length, 1);
+      assert.equal(saveNotice(), null);
+    } finally {
+      mock.timers.reset();
+      restore();
+    }
+  });
+
+  test("an import that cannot be written is not called done", () => {
+    const restore = refuseToWrite();
+    try {
+      assert.equal(
+        replaceExpenses(parseExpenses(JSON.stringify([expense()]))),
+        false,
+      );
+    } finally {
+      restore();
+    }
+  });
 });
 
 describe("the Saved notice", () => {
@@ -254,6 +356,30 @@ describe("replaceExpenses", () => {
       ["Existing"],
     );
     assert.equal(storedExpenses(), before);
+  });
+
+  test("answers whether the file was taken", () => {
+    mock.method(console, "error", () => {});
+    assert.equal(replaceExpenses(fromFile(expense())), true);
+    assert.equal(replaceExpenses(fromFile(expense({ amount: -1 }))), false);
+  });
+
+  // Two expenses under one id cannot be told apart afterwards: editing or
+  // deleting either would act on both.
+  test("rejects a file whose expenses share an id", () => {
+    mock.method(console, "error", () => {});
+    addExpense(filledIn({ description: "Existing" }));
+
+    const taken = replaceExpenses(
+      fromFile(expense({ id: 7 }), expense({ id: 7, description: "Bus" })),
+    );
+
+    assert.equal(taken, false);
+    assert.deepEqual(alerts, ["File contains errors."]);
+    assert.deepEqual(
+      expenses.map((each) => each.description),
+      ["Existing"],
+    );
   });
 
   test("reports every problem it found to the console", () => {

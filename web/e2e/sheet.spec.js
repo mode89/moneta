@@ -28,15 +28,28 @@ test.describe("the expense sheet", () => {
     await expect(app.categoriesOf("Cinema")).toHaveText("fun");
   });
 
-  test("ignores letters typed into the amount", async ({ app, dialogs }) => {
+  // A number field drops a typed comma, which turned 12,50 into 1250.
+  test("takes an amount typed with a decimal comma", async ({ app }) => {
+    await app.openNewExpense();
+
+    await app.amountInput.pressSequentially("12,50");
+    await app.descriptionInput.fill("Cinema");
+    await app.submit();
+
+    await expect(app.amountOf("Cinema")).toHaveText("12.50");
+    expect((await app.stored()).at(-1).amount).toBe(12.5);
+  });
+
+  test("refuses letters typed into the amount", async ({ app, dialogs }) => {
     await app.openNewExpense();
 
     await app.amountInput.pressSequentially("abc");
     await app.descriptionInput.fill("Cinema");
     await app.submit();
 
-    await expect(app.amountInput).toHaveValue("");
+    await expect(app.amountInput).toHaveValue("abc");
     await dialogs.expectMessage("Invalid amount.");
+    await expect(app.sheet).toBeVisible();
   });
 
   test("edits an existing value rather than replacing it", async ({ app }) => {

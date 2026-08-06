@@ -127,6 +127,57 @@ test.describe("keeping expenses on the device", () => {
   });
 });
 
+// Storage is a file like any other: something else on the device may have
+// left it in a state the app did not write.
+test.describe("storage the app did not write", () => {
+  test("shows the expenses beside an entry that is not one", async ({
+    app,
+    dialogs,
+  }) => {
+    dialogs.acceptAll();
+
+    await app.open({ now: FEBRUARY, expenses: [stored[0], null, stored[1]] });
+
+    await expect(app.listedDescriptions).toHaveText(["Groceries", "Coffee"]);
+  });
+
+  test("still starts, and says so, when the stored text is unreadable", async ({
+    app,
+    dialogs,
+  }) => {
+    dialogs.acceptAll();
+    await app.page.addInitScript(() =>
+      window.localStorage.setItem("expenses", "{ not json"),
+    );
+
+    await app.open({ now: FEBRUARY });
+
+    await expect(app.emptyMessage).toBeVisible();
+    await expect.poll(() => dialogs.messages.length).toBe(1);
+  });
+
+  // The store already holds the new expense when the write is refused, so the
+  // screen would otherwise show an expense the device has not kept.
+  test("reports a refused write", async ({ app, dialogs }) => {
+    dialogs.acceptAll();
+    await app.open({ now: FEBRUARY, expenses: [stored[0]] });
+    await app.page.evaluate(() => {
+      window.Storage.prototype.setItem = () => {
+        throw new Error("QuotaExceededError");
+      };
+    });
+
+    await app.addExpense({ amount: "5", description: "Bus" });
+
+    await expect
+      .poll(() => dialogs.messages)
+      .toContain(
+        "Could not save: the storage on this device is full or unavailable.",
+      );
+    await expect(app.saveNotice).toHaveCount(0);
+  });
+});
+
 test.describe("the Saved notice", () => {
   test("appears on a save and fades after three seconds", async ({ app }) => {
     await app.open({ now: FEBRUARY });

@@ -28,7 +28,8 @@ test.describe("editing an expense", () => {
 
     await expect(app.sheetTitle).toHaveText("Edit expense");
     await expect(app.submitButton).toHaveText("Save changes");
-    await expect(app.amountInput).toHaveValue("12.5");
+    // In cents, which is the text the field takes back.
+    await expect(app.amountInput).toHaveValue("12.50");
     await expect(app.descriptionInput).toHaveValue("Groceries");
     await expect(app.dateInput).toHaveValue("2026-02-12");
     await expect(app.categoryChip("food")).toContainText("✕");
@@ -117,7 +118,7 @@ test.describe("editing an expense", () => {
 
     await app.openExpense("Groceries");
 
-    await expect(app.amountInput).toHaveValue("12.5");
+    await expect(app.amountInput).toHaveValue("12.50");
   });
 
   test("tapping an amount reveals numbers instead of opening the sheet", async ({
@@ -140,7 +141,9 @@ test.describe("deleting an expense", () => {
 
     await app.deleteButton.click();
 
-    await expect(app.sheet).toHaveCount(0);
+    // The card sits over the sheet, which is left as it was if it is refused.
+    await app.settled();
+    await expect(app.sheet).toBeVisible();
     await expect(app.cardTitle).toHaveText("Delete this expense?");
     await expect(app.cardBody).toHaveText(
       "Groceries, $12.50 on 12 February. This cannot be undone.",
@@ -156,8 +159,26 @@ test.describe("deleting an expense", () => {
     await app.cancelButton.click();
 
     await expect(app.card).toHaveCount(0);
-    await expect(app.rows).toHaveCount(2);
+    await app.settled();
+    await expect(app.sheet).toBeVisible();
+    await expect(app.sheetTitle).toHaveText("Edit expense");
     expect(await app.stored()).toEqual([groceries, coffee]);
+  });
+
+  // What was typed into the sheet is still there: the card covered it, it did
+  // not replace it.
+  test("keeps the edit under way when the question is refused", async ({
+    app,
+  }) => {
+    await app.openExpense("Groceries");
+    await app.fillForm({ amount: "77", description: "Groceries and bread" });
+    await app.deleteButton.click();
+
+    await app.cancelButton.click();
+
+    await app.settled();
+    await expect(app.amountInput).toHaveValue("77");
+    await expect(app.descriptionInput).toHaveValue("Groceries and bread");
   });
 
   test("keeps the expense when the dim is tapped", async ({ app }) => {

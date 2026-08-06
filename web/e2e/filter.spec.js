@@ -143,6 +143,38 @@ test.describe("filtering by category", () => {
     await expect(app.legendChip("bills")).toHaveCount(0);
   });
 
+  // The chip is the only way to clear a filter, so a filter that outlived its
+  // chip left the list empty with nothing to tap.
+  test("clears itself when its last expense this month goes", async ({
+    app,
+  }) => {
+    await app.legendChip("travel").click();
+    await expect(app.listedDescriptions).toHaveText(["Bus"]);
+
+    await app.deleteExpense("Bus");
+
+    await expect(app.legendChip("travel")).toHaveCount(0);
+    await expect(app.listedDescriptions).toHaveText(["Lunch", "Dinner"]);
+  });
+
+  test("stays cleared when the category is used again", async ({ app }) => {
+    await app.legendChip("travel").click();
+    await app.deleteExpense("Bus");
+
+    await app.addExpense({
+      amount: "4",
+      description: "Tram",
+      categories: "travel",
+    });
+
+    await expect(app.legendChip("travel")).not.toHaveClass(/on/);
+    await expect(app.listedDescriptions).toHaveText([
+      "Tram",
+      "Lunch",
+      "Dinner",
+    ]);
+  });
+
   test("is forgotten after a reload", async ({ app, page }) => {
     await app.legendChip("food").click();
     await expect(app.rows).toHaveCount(2);

@@ -148,6 +148,31 @@ test.describe("choosing categories", () => {
     await expect(app.categoryChip("fun")).toContainText("✕");
   });
 
+  // Committing the draft rebuilds the chip row. Done as the chip is pressed,
+  // it moved the button out from under the finger and the tap was lost.
+  test("takes a chip tapped while the field holds a name", async ({ app }) => {
+    await app.openNewExpense();
+
+    await app.newCategoryChip.click();
+    await app.chipField.pressSequentially("fun");
+    await app.categoryChip("travel").click();
+
+    await expect(app.categoryChip("travel")).toContainText("✕");
+  });
+
+  // A phone keyboard commits a name on the space bar, but a paste can put a
+  // whole line in the field at once.
+  test("takes every name a pasted line holds", async ({ app }) => {
+    await app.openNewExpense();
+
+    await app.newCategoryChip.click();
+    await app.chipField.fill("zoo apple");
+    await app.descriptionInput.click();
+
+    await expect(app.categoryChip("zoo")).toContainText("✕");
+    await expect(app.categoryChip("apple")).toContainText("✕");
+  });
+
   test("selects an existing category rather than repeating it", async ({
     app,
   }) => {

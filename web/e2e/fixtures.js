@@ -156,6 +156,18 @@ export class MonetaApp {
     this.version = this.settings.locator(".version");
 
     this.saveNotice = page.locator(".notice");
+
+    // Present only while an overlay slides in or out. An overlay that is
+    // leaving is still in the page and still counts as visible, so a test
+    // about what stays on screen has to wait for these to go.
+    this.movingOverlays = page.locator(
+      ".sheet-enter-active, .sheet-exit-active," +
+        " .cover-enter-active, .cover-exit-active",
+    );
+  }
+
+  async settled() {
+    await expect(this.movingOverlays).toHaveCount(0);
   }
 
   // `expenses` are seeded in stored form (`date` as YYYY-MM-DD); `now` fixes
@@ -315,6 +327,7 @@ export class MonetaApp {
     await expect(this.card).toBeVisible();
     await this.confirmButton.click();
     await expect(this.card).toHaveCount(0);
+    await expect(this.sheet).toHaveCount(0);
   }
 
   async openSettings() {

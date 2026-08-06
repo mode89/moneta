@@ -89,3 +89,30 @@ test("back leaves the app when nothing is open", async ({ page }) => {
     .poll(() => nativeCalls(page))
     .toEqual([{ plugin: "App", method: "exitApp" }]);
 });
+
+// A closing overlay is still on screen while it slides away, so a second press
+// in that moment is still aimed at it and must not close the app.
+test("back twice in a moment closes the sheet without leaving", async ({
+  app,
+  page,
+}) => {
+  await app.openNewExpense();
+
+  await pressBackButton(page);
+  await pressBackButton(page);
+
+  await expect(app.sheet).toHaveCount(0);
+  expect(await nativeCalls(page)).toEqual([]);
+});
+
+test("back leaves the app once the sheet has gone", async ({ app, page }) => {
+  await app.openNewExpense();
+  await pressBackButton(page);
+  await app.settled();
+
+  await pressBackButton(page);
+
+  await expect
+    .poll(() => nativeCalls(page))
+    .toEqual([{ plugin: "App", method: "exitApp" }]);
+});
