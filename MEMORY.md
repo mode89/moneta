@@ -18,6 +18,7 @@ _Reference context — observed facts and standing conventions for this project,
 - A view with no suite coverage yet is checked by a throwaway Node script that seeds `localStorage`, fixes the clock and screenshots each state. Why: it sees what a locator assertion cannot.
 - Long-running commands are given an explicit timeout. Why: a `nix-shell --run` that hung on a background server ran for 147 seconds before the user aborted it. How to apply: suite runs, builds, and anything that starts a server.
 - Local test runs are made without asking the user first: `scripts/dev` commands, the `web/e2e` server and throwaway browser scripts alike. Why: the user gave this standing permission and restated it after a test command was queued for confirmation.
+- Test and lint tool calls are marked safe, so the harness does not queue them for approval. Why: the user asked for it mid-session, after `scripts/dev test` and `scripts/dev lint` runs were held for confirmation.
 - The UI suite reaches the app through `web/e2e/fixtures.js`, where locators live on the `MonetaApp` page object. Why: the app has no test hooks, so its markup is described in one place. How to apply: add locators there, not in a spec.
 - `MonetaApp` helpers that describe rendered content expose a locator, not an awaited snapshot. Why: `expect(await …).toEqual(…)` compares plain values and never retries, so it reads the DOM mid-render.
 - Lists rendered by the app are asserted with `expect(locator).toHaveText([...])`, which retries on both the element count and the texts.
@@ -45,6 +46,8 @@ _Reference context — observed facts and standing conventions for this project,
 - The intermittent `back-button.spec.js` failure, about 1 full suite run in 4, was that overlay defect under parallel load rather than a test race; 50 consecutive runs pass since `settleTransition`.
 - In `solid-js/html`, reading a signal inside the expression that renders an `<input>` rebuilds that input on every keystroke and loses what was typed. Draft text has to live in a plain variable outside the reactive graph.
 - `solid-js/html` drops the static whitespace between an element and the expression that follows it, so `<b>${n}</b> ${word}` renders as `1expense`; the space has to be part of the interpolated string.
+- A `solid-js/html` template whose whole body is one expression, html`${expr}`, throws `SyntaxError: Unexpected token '.'` from its function builder at first render and leaves the page blank.
+- A component that renders one node or nothing returns the accessor function itself, which Solid inserts reactively. Why: `solid-js/html` cannot compile a template that is only an expression, so it cannot be wrapped.
 - A CSS `gap` on a flex line hides missing text spacing: the page looks right while the DOM text runs the words together, which is what a screen reader and a copy-paste get.
 - `android/app/src/main/assets/public/` holds build output that can lag `web/`, so the installed APK shows a stale UI until `scripts/dev build` runs; a bug seen "in the app" may be a bug in old assets.
 - `scripts/dev serve` refreshes the assets it serves before serving them, so it never shows a stale UI.
@@ -83,6 +86,7 @@ _Reference context — observed facts and standing conventions for this project,
 - A Chromium that dies mid-test reports as "Target page, context or browser has been closed" on whatever locator call was in flight; the real cause is the last `[pid=...][err]` line in the browser log.
 - `node_modules/playwright` is a 1.62 alpha pulled in by `@playwright/cli`, and its Chromium build is absent from the Nix browser set.
 - A script outside the UI suite imports `chromium` from `node_modules/@playwright/test/node_modules/playwright`, the copy whose browser build the Nix set holds.
+- That playwright copy's `index.js` is CommonJS, so a named import fails with "Named export 'chromium' not found"; a script needs `import pkg from …` then `const { chromium } = pkg`.
 - `@playwright/test` in `package.json` is pinned exact to the nixpkgs `playwright-driver` version, 1.59.1 as of July 2026.
 - A Playwright release and a Chromium build number are a matched pair; when the npm version and the Nix browser set disagree, every test fails at launch with "Executable doesn't exist" naming a build absent from the store path.
 - A nixpkgs bump that moves `playwright-driver` re-breaks the suite until `@playwright/test` is re-pinned to match; `nix-instantiate --eval -E 'with import <nixpkgs> {}; playwright-driver.version'` reads the version to pin to.
@@ -118,6 +122,7 @@ _Reference context — observed facts and standing conventions for this project,
 - A category filter applies to older months as well, so unfolding one while a filter is on shows only its matching rows.
 - The add/edit dialog is a full bottom sheet, and it closes by tapping the dimmed area outside it, discarding silently. On the device the back button closes it too; a plain browser has only the dim.
 - The back button closes one overlay at a time, innermost first: delete confirmation, import confirmation, add/edit sheet, settings; with none open it exits the app.
+- One `overlays` stack signal replaced the four signals that named each overlay separately. Why: the back button then pops the last, rather than a four-branch cascade restating the order `App` already renders in.
 - Back is device-only: no Escape-key equivalent was added in the browser. Why: the browser has no such button, and the Playwright suite proves the wiring by firing the plugin event.
 - The UI suite's native stand-in keeps the listeners the app registers instead of recording them as calls, and `pressBackButton(page)` in `web/e2e/fixtures.js` invokes the `App:backButton` one. Why: existing native-call assertions stay unchanged.
 - The header shows month, total, expense count and average per day, with no eyebrow label above the month. Why: a label restates the month line and only carries information while filtering.

@@ -12,18 +12,15 @@ const Share = registerPlugin("Share");
 const AppPlugin = registerPlugin("App");
 
 export const [expenses, setExpenses] = createStore([]);
-const [editedExpense, setEditedExpense] = createSignal(null);
-const [deletedExpense, setDeletedExpense] = createSignal(null);
-const [reviewedImport, setReviewedImport] = createSignal(null);
-const [settingsOpen, setSettingsOpen] = createSignal(false);
 const [activeCategory, setActiveCategory] = createSignal(null);
 const [unfoldedMonths, setUnfoldedMonths] = createSignal([]);
 const [showNumbers, setShowNumbers] = createSignal(false);
 export const [saveNotice, setSaveNotice] = createSignal(null);
 
-// `editedExpense` is the id of the expense being edited, NEW_EXPENSE while one
-// is being added, or null when no sheet is open.
-const NEW_EXPENSE = "new";
+// What is open over the app, outermost first: settings, then the sheet or a
+// card opened from it. Each overlay names itself with a kind, and at most one
+// of a kind is open, so a kind identifies it.
+const [overlays, setOverlays] = createSignal([]);
 
 export function main() {
   setExpenses(loadExpenses());
@@ -36,11 +33,9 @@ export function main() {
 
 // The back button closes one overlay at a time, innermost first.
 function closeTopOverlay() {
-  if (deletedExpense() !== null) setDeletedExpense(null);
-  else if (reviewedImport() !== null) setReviewedImport(null);
-  else if (editedExpense() !== null) setEditedExpense(null);
-  else if (settingsOpen()) setSettingsOpen(false);
-  else AppPlugin.exitApp();
+  const open = overlays();
+  if (open.length === 0) AppPlugin.exitApp();
+  else setOverlays(open.slice(0, -1));
 }
 
 function App() {
@@ -50,83 +45,11 @@ function App() {
       <${CategoryLegend} />
       <div class="scroll"><${ExpenseList} /></div>
       <${NewExpenseButton} />
-      <${Transition}
-        name="sheet"
-        mode="outin"
-        onEnter=${settleTransition}
-        onExit=${settleTransition}
-      >
-        ${() => {
-          const edited = editedExpense();
-          if (edited === null) return null;
-          if (edited === NEW_EXPENSE)
-            return html`<${ExpenseSheet}
-              title="Add an expense"
-              submitLabel="Save expense"
-              initial=${blankExpenseForm()}
-              actions=${newExpenseActions()}
-            />`;
-          return html`<${ExpenseSheet}
-            title="Edit expense"
-            submitLabel="Save changes"
-            initial=${untrack(() => formFromExpense(findExpense(edited)))}
-            actions=${editExpenseActions(edited)}
-          />`;
-        }}
-      <//>
-      ${() => {
-        const id = deletedExpense();
-        if (id === null) return null;
-        const expense = untrack(() => findExpense(id));
-        return html`<${ConfirmCard}
-          title="Delete this expense?"
-          body=${deleteMessage(expense)}
-          cancelLabel="Keep"
-          confirmLabel="Delete"
-          actions=${{
-            confirm: () => {
-              deleteExpense(id);
-              setDeletedExpense(null);
-            },
-            cancel: () => setDeletedExpense(null),
-          }}
-        />`;
-      }}
-      <${Transition}
-        name="cover"
-        mode="outin"
-        onEnter=${settleTransition}
-        onExit=${settleTransition}
-      >
-        ${() => (settingsOpen() ? html`<${SettingsScreen} />` : null)}
-      <//>
-      ${() => {
-        const review = reviewedImport();
-        if (review === null) return null;
-        return html`<${ConfirmCard}
-          title="Import this file?"
-          body=${untrack(() => importMessage(review, expenses.length))}
-          cancelLabel="Keep mine"
-          confirmLabel="Import"
-          actions=${{
-            confirm: () => {
-              setReviewedImport(null);
-              setSettingsOpen(false);
-              replaceExpensesFromJson(review.json);
-            },
-            cancel: () => setReviewedImport(null),
-          }}
-        />`;
-      }}
-      <${Transition}
-        name="notice"
-        onEnter=${settleTransition}
-        onExit=${settleTransition}
-      >
-        ${() =>
-          saveNotice() &&
-          html`<div class="notice" role="status">${saveNotice()}</div>`}
-      <//>
+      <${EditedExpenseSheet} />
+      <${DeleteConfirmation} />
+      <${SettingsCover} />
+      <${ImportConfirmation} />
+      <${SaveNotice} />
     </div>`;
 }
 
@@ -137,31 +60,35 @@ function MonthSummary() {
     visibleExpenses().filter((expense) => isSameMonth(expense.date, now())),
   );
   const total = createMemo(() => totalOf(monthly()));
+  const perDay = createMemo(() => {
+    const today = now();
+    return averagePerDay(total(), today, today);
+  });
   return html`
     <div class="head">
       <button
         class="corner"
         title="Settings"
         aria-label="Settings"
-        onClick=${() => setSettingsOpen(true)}
+        onClick=${() => openOverlay({ kind: "settings" })}
       >
         ⚙
       </button>
       <div class="month">${() => formatMonth(now())}</div>
       <div class="total" onClick=${toggleNumbers}>
-        <${Amount} value=${() => total()} />
+        <${Amount} value=${total} />
       </div>
       <div class="meta">
         <!-- the space belongs inside the expression: solid-js/html trims the
              whitespace between an element and the expression that follows -->
         <span>
           <b>${() => monthly().length}</b>${() =>
-            " " + expenseNoun(monthly().length)}
+            " " + pluralNoun(monthly().length, "expense")}
         </span>
         ${() =>
           monthly().length > 0 &&
           html`<span>
-            <b><${Amount} value=${() => averagePerDay(total(), now(), now())} /></b>
+            <b><${Amount} value=${perDay} /></b>
             ${() => " a day"}
           </span>`}
       </div>
@@ -179,14 +106,15 @@ function CategoryLegend() {
   return html`
     <div class="legend">
       <${For} each=${totals}>
-        ${(each) => html`
+        ${(category) => html`
           <button
-            class=${() => "chip" + (activeCategory() === each.name ? " on" : "")}
-            onClick=${() => toggleFilter(each.name)}
+            class=${() =>
+              "chip" + (activeCategory() === category.name ? " on" : "")}
+            onClick=${() => toggleFilter(category.name)}
           >
-            <i style=${{ background: categoryInk(each.name) }}></i>
-            ${each.name}
-            <${Amount} value=${() => each.total} format=${roundedCurrency} />
+            <i style=${{ background: categoryInk(category.name) }}></i>
+            ${category.name}
+            <${Amount} value=${category.total} format=${roundedCurrency} />
           </button>`}
       <//>
     </div>`;
@@ -224,13 +152,13 @@ function DayGroups(props) {
   const heading = (date) =>
     props.relative ? formatDay(date, now()) : formatDate(date);
   return html`
-    <${For} each=${() => days}>
+    <${For} each=${days}>
       ${(day) => html`
         <div class="day" onClick=${toggleNumbers}>
           <span>${heading(day.date)}</span>
-          <span class="sum"><${Amount} value=${() => totalOf(day.expenses)} /></span>
+          <span class="sum"><${Amount} value=${totalOf(day.expenses)} /></span>
         </div>
-        <${For} each=${() => day.expenses}>
+        <${For} each=${day.expenses}>
           ${(expense) => html`<${ExpenseRow} expense=${expense} />`}
         <//>`}
     <//>`;
@@ -238,29 +166,29 @@ function DayGroups(props) {
 
 function ExpenseRow(props) {
   const expense = props.expense;
+  const categorised = expense.categories.length > 0;
   const revealOnly = (event) => {
     event.stopPropagation();
     toggleNumbers();
   };
   return html`
-    <div class="row" onClick=${() => setEditedExpense(expense.id)}>
+    <div
+      class="row"
+      onClick=${() => openOverlay({ kind: "editExpense", id: expense.id })}
+    >
       <i
-        class=${expense.categories.length > 0 ? "dot" : "dot uncategorised"}
-        style=${
-          expense.categories.length > 0
-            ? { background: categoryInk(expense.categories[0]) }
-            : {}
-        }
+        class=${categorised ? "dot" : "dot uncategorised"}
+        style=${categorised ? { background: categoryInk(expense.categories[0]) } : {}}
       ></i>
       <div>
         <div class="desc">${expense.description}</div>
         ${
-          expense.categories.length > 0 &&
+          categorised &&
           html`<div class="cats">${expense.categories.join(" · ")}</div>`
         }
       </div>
       <div class="amt" onClick=${revealOnly}>
-        <${Amount} value=${() => expense.amount} format=${plainAmount} />
+        <${Amount} value=${expense.amount} format=${plainAmount} />
       </div>
     </div>`;
 }
@@ -271,13 +199,18 @@ function FoldedMonth(props) {
   const month = props.month;
   const total = totalOf(month.expenses);
   const unfolded = () => unfoldedMonths().includes(month.key);
-  const help = () => {
+  // Every word sits inside an expression, since solid-js/html trims the static
+  // whitespace around an element.
+  const foldSummary = () => {
     const count = month.expenses.length;
-    if (activeCategory()) return `${count} in ${activeCategory()}`;
-    if (!unfolded()) return plural(count, "expense");
-    return html`${plural(count, "expense")} · <${Amount}
-        value=${() => averagePerDay(total, month.date, now())}
-      /> a day`;
+    const filter = activeCategory();
+    if (filter) return html`<span>${`${count} in ${filter}`}</span>`;
+    if (!unfolded()) return html`<span>${plural(count, "expense")}</span>`;
+    return html`<span>
+      ${plural(count, "expense") + " · "}
+      <${Amount} value=${averagePerDay(total, month.date, now())} />
+      ${" a day"}
+    </span>`;
   };
   return html`
     <div>
@@ -285,9 +218,9 @@ function FoldedMonth(props) {
         <span class="caret">${() => (unfolded() ? "⌄" : "›")}</span>
         <div>
           <div class="name">${formatMonth(month.date)}</div>
-          <div class="help">${help}</div>
+          <div class="help">${foldSummary}</div>
         </div>
-        <div class="sum"><${Amount} value=${() => total} /></div>
+        <div class="sum"><${Amount} value=${total} /></div>
       </div>
       ${() => unfolded() && html`<${DayGroups} month=${month} />`}
     </div>`;
@@ -298,7 +231,7 @@ function NewExpenseButton() {
     <button
       class="fab"
       aria-label="Add an expense"
-      onClick=${() => setEditedExpense(NEW_EXPENSE)}
+      onClick=${() => openOverlay({ kind: "newExpense" })}
     >
       +
     </button>`;
@@ -313,38 +246,44 @@ function Amount(props) {
   </span>`;
 }
 
+// The one sheet behind adding and editing. `mode="outin"` makes a reopened
+// sheet wait for the leaving one, so only ever one is in the page.
+function EditedExpenseSheet() {
+  return html`
+    <${Transition}
+      name="sheet"
+      mode="outin"
+      onEnter=${settleTransition}
+      onExit=${settleTransition}
+    >
+      ${() => {
+        const added = overlayOf("newExpense");
+        if (added)
+          return html`<${ExpenseSheet}
+            title="Add an expense"
+            submitLabel="Save expense"
+            initial=${blankExpenseForm()}
+            actions=${newExpenseActions()}
+          />`;
+        const edited = overlayOf("editExpense");
+        if (!edited) return null;
+        return html`<${ExpenseSheet}
+          title="Edit expense"
+          submitLabel="Save changes"
+          initial=${untrack(() => formFromExpense(findExpense(edited.id)))}
+          actions=${editExpenseActions(edited.id)}
+        />`;
+      }}
+    <//>`;
+}
+
 // Shared add/edit sheet; Delete appears only when the actions provide it. The
 // dim behind it is the only way to close it, and closing discards silently.
 function ExpenseSheet(props) {
   const [form, setForm] = createStore(props.initial);
-  const [namingCategory, setNamingCategory] = createSignal(false);
-  // The typed text is held outside the reactive graph: reading it in the markup
-  // would rebuild the input on every keystroke and lose what was typed.
-  let draftCategory = "";
-  const field = (key) => (event) => setForm(key, event.target.value);
-  const chosen = () => parseCategories(form.categories);
-  const offered = createMemo(() => knownCategories(expenses, chosen()));
+  const updateField = (key) => (event) => setForm(key, event.target.value);
   const toggleCategory = (name) =>
     setForm("categories", withCategoryToggled(form.categories, name));
-  const nameCategory = () => {
-    draftCategory = "";
-    setNamingCategory(true);
-  };
-  const commitDraft = () => {
-    const [name] = parseCategories(draftCategory);
-    setNamingCategory(false);
-    if (name && !chosen().includes(name)) toggleCategory(name);
-  };
-  const draftKey = (event) => {
-    if (event.key === " " || event.key === "Enter") {
-      event.preventDefault();
-      commitDraft();
-    } else if (event.key === "Escape") {
-      setNamingCategory(false);
-    } else if (event.key === "Backspace" && event.target.value === "") {
-      setNamingCategory(false);
-    }
-  };
   const submit = () => {
     const expense = expenseFromForm(form);
     const error = expenseError(expense);
@@ -369,7 +308,7 @@ function ExpenseSheet(props) {
           placeholder="0.00"
           step="0.01"
           value=${() => form.amount}
-          onInput=${field("amount")}
+          onInput=${updateField("amount")}
         />
         <label class="flabel" for="expense-description">Description</label>
         <input
@@ -378,7 +317,7 @@ function ExpenseSheet(props) {
           type="text"
           placeholder="e.g. Groceries"
           value=${() => form.description}
-          onInput=${field("description")}
+          onInput=${updateField("description")}
         />
         <label class="flabel" for="expense-date">Date</label>
         <input
@@ -386,32 +325,13 @@ function ExpenseSheet(props) {
           id="expense-date"
           type="date"
           value=${() => form.date}
-          onInput=${field("date")}
+          onInput=${updateField("date")}
         />
         <label class="flabel">Categories</label>
-        <div class="chiprow">
-          <${For} each=${offered}>
-            ${(name) => html`
-              <button
-                class=${() => "chip" + (chosen().includes(name) ? " on" : "")}
-                onClick=${() => toggleCategory(name)}
-              >
-                <i style=${{ background: categoryInk(name) }}></i>
-                ${name}${() => (chosen().includes(name) ? " ✕" : "")}
-              </button>`}
-          <//>
-          ${() =>
-            namingCategory()
-              ? html`<input
-                  class="chip-field"
-                  autofocus
-                  ref=${(element) => setTimeout(() => element.focus())}
-                  onInput=${(event) => (draftCategory = event.target.value)}
-                  onKeyDown=${draftKey}
-                  onBlur=${commitDraft}
-                />`
-              : html`<button class="chip" onClick=${nameCategory}>+ new</button>`}
-        </div>
+        <${CategoryPicker}
+          chosen=${() => form.categories}
+          actions=${{ toggle: toggleCategory }}
+        />
         ${() =>
           props.actions.remove
             ? html`<div class="actions">
@@ -427,22 +347,113 @@ function ExpenseSheet(props) {
     </div>`;
 }
 
+// Every category used before, most recent first, and a field that names a new
+// one. A typed name is taken on space, Enter or leaving the field.
+function CategoryPicker(props) {
+  const [namingCategory, setNamingCategory] = createSignal(false);
+  // The typed text is held outside the reactive graph: reading it in the markup
+  // would rebuild the input on every keystroke and lose what was typed.
+  let draftCategory = "";
+  const offered = createMemo(() => knownCategories(expenses, props.chosen));
+  const nameCategory = () => {
+    draftCategory = "";
+    setNamingCategory(true);
+  };
+  const commitDraft = () => {
+    const [name] = parseCategories(draftCategory);
+    setNamingCategory(false);
+    if (name && !props.chosen.includes(name)) props.actions.toggle(name);
+  };
+  const draftKey = (event) => {
+    if (event.key === " " || event.key === "Enter") {
+      event.preventDefault();
+      commitDraft();
+    } else if (event.key === "Escape") {
+      setNamingCategory(false);
+    } else if (event.key === "Backspace" && event.target.value === "") {
+      setNamingCategory(false);
+    }
+  };
+  return html`
+    <div class="chiprow">
+      <${For} each=${offered}>
+        ${(name) => html`
+          <button
+            class=${() => "chip" + (props.chosen.includes(name) ? " on" : "")}
+            onClick=${() => props.actions.toggle(name)}
+          >
+            <i style=${{ background: categoryInk(name) }}></i>
+            ${name}${() => (props.chosen.includes(name) ? " ✕" : "")}
+          </button>`}
+      <//>
+      ${() =>
+        namingCategory()
+          ? html`<input
+              class="chip-field"
+              autofocus
+              ref=${(element) => setTimeout(() => element.focus())}
+              onInput=${(event) => (draftCategory = event.target.value)}
+              onKeyDown=${draftKey}
+              onBlur=${commitDraft}
+            />`
+          : html`<button class="chip" onClick=${nameCategory}>+ new</button>`}
+    </div>`;
+}
+
+// Deleting names the expense that will go, and takes the place of the sheet
+// it was asked for from.
+function DeleteConfirmation() {
+  return () => {
+    const overlay = overlayOf("deleteExpense");
+    if (!overlay) return null;
+    const expense = untrack(() => findExpense(overlay.id));
+    return html`<${ConfirmCard}
+      title="Delete this expense?"
+      body=${deleteMessage(expense)}
+      cancelLabel="Keep"
+      confirmLabel="Delete"
+      actions=${{
+        confirm: () => {
+          deleteExpense(overlay.id);
+          closeOverlay("deleteExpense");
+        },
+        cancel: () => closeOverlay("deleteExpense"),
+      }}
+    />`;
+  };
+}
+
 // Both destructive actions ask first, naming what will go.
 function ConfirmCard(props) {
   return html`
-    <div class="scrim" onClick=${() => props.actions.cancel()}></div>
-    <div class="card" role="dialog">
-      <h3>${() => props.title}</h3>
-      <p>${() => props.body}</p>
-      <div class="actions">
-        <button class="ghost" onClick=${() => props.actions.cancel()}>
-          ${() => props.cancelLabel}
-        </button>
-        <button class="save danger" onClick=${() => props.actions.confirm()}>
-          ${() => props.confirmLabel}
-        </button>
+    <div class="card-layer">
+      <div class="scrim" onClick=${() => props.actions.cancel()}></div>
+      <div class="card" role="dialog">
+        <h3>${() => props.title}</h3>
+        <p>${() => props.body}</p>
+        <div class="actions">
+          <button class="ghost" onClick=${() => props.actions.cancel()}>
+            ${() => props.cancelLabel}
+          </button>
+          <button class="save danger" onClick=${() => props.actions.confirm()}>
+            ${() => props.confirmLabel}
+          </button>
+        </div>
       </div>
     </div>`;
+}
+
+// The settings screen slides in beside the app and covers it at rest.
+function SettingsCover() {
+  return html`
+    <${Transition}
+      name="cover"
+      mode="outin"
+      onEnter=${settleTransition}
+      onExit=${settleTransition}
+    >
+      ${() => overlayOf("settings") && html`<${SettingsScreen} />`}
+    <//>`;
 }
 
 // Opened by the gear, closed by the ✕ in the same corner. It holds only what
@@ -455,7 +466,7 @@ function SettingsScreen() {
           <button
             class="corner"
             aria-label="Close settings"
-            onClick=${() => setSettingsOpen(false)}
+            onClick=${() => closeOverlay("settings")}
           >
             ✕
           </button>
@@ -481,13 +492,61 @@ function SettingsScreen() {
     </div>`;
 }
 
+// Nothing is replaced until this card is confirmed, and confirming leaves
+// settings as well, since the list behind it has changed.
+function ImportConfirmation() {
+  return () => {
+    const review = overlayOf("importConfirmation");
+    if (!review) return null;
+    return html`<${ConfirmCard}
+      title="Import this file?"
+      body=${untrack(() => importMessage(review, expenses.length))}
+      cancelLabel="Keep mine"
+      confirmLabel="Import"
+      actions=${{
+        confirm: () => {
+          closeOverlay("importConfirmation");
+          closeOverlay("settings");
+          replaceExpenses(review.expenses);
+        },
+        cancel: () => closeOverlay("importConfirmation"),
+      }}
+    />`;
+  };
+}
+
+function SaveNotice() {
+  return html`
+    <${Transition}
+      name="notice"
+      onEnter=${settleTransition}
+      onExit=${settleTransition}
+    >
+      ${() =>
+        saveNotice() &&
+        html`<div class="notice" role="status">${saveNotice()}</div>`}
+    <//>`;
+}
+
+function openOverlay(overlay) {
+  setOverlays((open) => [...open, overlay]);
+}
+
+function closeOverlay(kind) {
+  setOverlays((open) => open.filter((each) => each.kind !== kind));
+}
+
+function overlayOf(kind) {
+  return overlays().find((each) => each.kind === kind) ?? null;
+}
+
 function newExpenseActions() {
   return {
     save(expense) {
       addExpense(expense);
-      closeSheet();
+      closeOverlay("newExpense");
     },
-    close: closeSheet,
+    close: () => closeOverlay("newExpense"),
   };
 }
 
@@ -495,18 +554,14 @@ function editExpenseActions(id) {
   return {
     save(expense) {
       updateExpense(id, expense);
-      closeSheet();
+      closeOverlay("editExpense");
     },
     remove() {
-      closeSheet();
-      setDeletedExpense(id);
+      closeOverlay("editExpense");
+      openOverlay({ kind: "deleteExpense", id });
     },
-    close: closeSheet,
+    close: () => closeOverlay("editExpense"),
   };
-}
-
-function closeSheet() {
-  setEditedExpense(null);
 }
 
 function toggleFilter(category) {
@@ -530,24 +585,26 @@ function visibleExpenses() {
 // Ids are creation timestamps; groupByDay orders a day's expenses by them.
 export function addExpense(expense) {
   setExpenses((expenses) => [...expenses, { id: now().getTime(), ...expense }]);
-  saveExpenses();
+  saveExpenses(expenses);
 }
 
 export function updateExpense(id, expense) {
   setExpenses((expenses) =>
     expenses.map((each) => (each.id === id ? { id, ...expense } : each)),
   );
-  saveExpenses();
+  saveExpenses(expenses);
 }
 
 export function deleteExpense(id) {
   setExpenses((expenses) => expenses.filter((expense) => expense.id !== id));
-  saveExpenses();
+  saveExpenses(expenses);
 }
 
 // Returns an error message for an invalid expense, or null.
 export function expenseError(expense) {
-  if (isNaN(expense.amount) || expense.amount <= 0) return "Invalid amount.";
+  // Number.isFinite, not isNaN: an imported file can carry the amount as text.
+  if (!Number.isFinite(expense.amount) || expense.amount <= 0)
+    return "Invalid amount.";
   if (!expense.description || expense.description.trim() === "")
     return "Description cannot be empty.";
   if (isNaN(expense.date.getTime())) return "Invalid date.";
@@ -556,14 +613,14 @@ export function expenseError(expense) {
   return null;
 }
 
-// A form holds what the user typed; expenseFromForm is the only place it
-// becomes an expense.
+// A form holds what the user typed, as text apart from the categories the
+// chips carry; expenseFromForm is the only place it becomes an expense.
 export function blankExpenseForm() {
   return {
     amount: "",
     description: "",
     date: toIsoDate(now()),
-    categories: "",
+    categories: [],
   };
 }
 
@@ -572,7 +629,7 @@ export function formFromExpense(expense) {
     amount: String(expense.amount),
     description: expense.description,
     date: toIsoDate(expense.date),
-    categories: [...expense.categories].join(" "),
+    categories: [...expense.categories],
   };
 }
 
@@ -581,7 +638,7 @@ export function expenseFromForm(form) {
     amount: parseFloat(form.amount),
     description: form.description.trim(),
     date: parseIsoDate(form.date),
-    categories: parseCategories(form.categories),
+    categories: [...form.categories],
   };
 }
 
@@ -590,7 +647,7 @@ export function deleteMessage(expense) {
 }
 
 export function importMessage(review, current) {
-  const holds = `${review.filename} holds ${plural(review.count, "expense")}.`;
+  const holds = `${review.filename} holds ${plural(review.expenses.length, "expense")}.`;
   if (current === 0)
     return `${holds} Importing replaces everything on this device and cannot be undone.`;
   return `${holds} Importing removes the ${plural(current, "expense")} on this device and cannot be undone.`;
@@ -599,10 +656,11 @@ export function importMessage(review, current) {
 function exportExpenses() {
   const json = serializeExpenses(expenses);
   const filename = "moneta-" + toIsoDate(now()) + ".json";
-  if (Capacitor.isNativePlatform()) {
-    shareExport(filename, json);
-    return;
-  }
+  if (Capacitor.isNativePlatform()) shareExport(filename, json);
+  else downloadFile(filename, json);
+}
+
+function downloadFile(filename, json) {
   const url = URL.createObjectURL(
     new Blob([json], { type: "application/json" }),
   );
@@ -648,8 +706,8 @@ function importExpenses() {
   input.click();
 }
 
-// Nothing is replaced until the card is confirmed, so a file that cannot even
-// be read is reported here rather than after the question.
+// The file is read once, here: a file that cannot be read at all is reported
+// instead of the question, and the card carries the expenses it offers.
 function reviewImport(json, filename) {
   let imported;
   try {
@@ -658,24 +716,19 @@ function reviewImport(json, filename) {
     alert("Failed to import expenses: " + e.message);
     return;
   }
-  setReviewedImport({ json, filename, count: imported.length });
+  openOverlay({ kind: "importConfirmation", filename, expenses: imported });
 }
 
 // Importing discards the expenses already on the device.
-export function replaceExpensesFromJson(json) {
-  try {
-    const imported = parseExpenses(json);
-    const errors = imported.map(importedExpenseError).filter((e) => e !== null);
-    if (errors.length > 0) {
-      alert("File contains errors.");
-      errors.forEach((error) => console.error(error));
-      return;
-    }
-    setExpenses(imported);
-    saveExpenses();
-  } catch (e) {
-    alert("Failed to import expenses: " + e.message);
+export function replaceExpenses(imported) {
+  const errors = imported.map(importedExpenseError).filter((e) => e !== null);
+  if (errors.length > 0) {
+    alert("File contains errors.");
+    errors.forEach((error) => console.error(error));
+    return;
   }
+  setExpenses(imported);
+  saveExpenses(imported);
 }
 
 // Returns an error message for an invalid imported expense, or null.
@@ -689,10 +742,14 @@ export function loadExpenses() {
   return stored ? parseExpenses(stored) : [];
 }
 
+export function saveExpenses(expenses) {
+  localStorage.setItem("expenses", serializeExpenses(expenses));
+  noticeSaved();
+}
+
 let noticeTimer = null;
 
-export function saveExpenses() {
-  localStorage.setItem("expenses", serializeExpenses(expenses));
+function noticeSaved() {
   setSaveNotice("Saved");
   clearTimeout(noticeTimer);
   noticeTimer = setTimeout(() => setSaveNotice(null), 3000);
@@ -735,9 +792,11 @@ export function parseCategories(input) {
 export function knownCategories(expenses, extra = []) {
   const lastSpent = new Map();
   for (const expense of expenses)
-    for (const category of expense.categories)
-      if (!(lastSpent.get(category) >= expense.date))
+    for (const category of expense.categories) {
+      const seen = lastSpent.get(category);
+      if (seen === undefined || expense.date > seen)
         lastSpent.set(category, expense.date);
+    }
   const used = [...lastSpent.keys()].sort(
     (one, other) =>
       lastSpent.get(other) - lastSpent.get(one) || one.localeCompare(other),
@@ -745,18 +804,14 @@ export function knownCategories(expenses, extra = []) {
   return [...extra.filter((name) => !lastSpent.has(name)), ...used];
 }
 
-export function withCategoryToggled(input, category) {
-  const categories = parseCategories(input);
-  const remaining = categories.filter((each) => each !== category);
-  const toggled =
-    remaining.length === categories.length
-      ? [...categories, category].sort()
-      : remaining;
-  return toggled.join(" ");
+export function withCategoryToggled(categories, category) {
+  if (categories.includes(category))
+    return categories.filter((each) => each !== category);
+  return [...categories, category].sort();
 }
 
 export function filterByCategory(expenses, category) {
-  if (!category) return [...expenses];
+  if (!category) return expenses;
   return expenses.filter((expense) => expense.categories.includes(category));
 }
 
@@ -773,7 +828,9 @@ export function groupByMonth(expenses) {
     group.expenses.push(expense);
     byMonth.set(key, group);
   }
-  return [...byMonth.values()].sort((a, b) => (a.key < b.key ? 1 : -1));
+  return [...byMonth.values()].sort((one, other) =>
+    one.key < other.key ? 1 : -1,
+  );
 }
 
 // Newest day first, and newest expense first within a day.
@@ -786,10 +843,10 @@ export function groupByDay(expenses) {
     byDay.set(day, group);
   }
   return [...byDay.entries()]
-    .sort(([a], [b]) => b - a)
+    .sort(([one], [other]) => other - one)
     .map(([day, expenses]) => ({
       date: new Date(day),
-      expenses: [...expenses].sort((a, b) => b.id - a.id),
+      expenses: [...expenses].sort((one, other) => other.id - one.id),
     }));
 }
 
@@ -801,7 +858,10 @@ export function categoryTotals(expenses) {
       totals.set(category, (totals.get(category) ?? 0) + expense.amount);
   return [...totals.entries()]
     .map(([name, total]) => ({ name, total }))
-    .sort((a, b) => b.total - a.total || (a.name < b.name ? -1 : 1));
+    .sort(
+      (one, other) =>
+        other.total - one.total || (one.name < other.name ? -1 : 1),
+    );
 }
 
 // The six deep inks. A category's colour is derived from its name, never
@@ -857,26 +917,30 @@ export function formatDate(date) {
 
 export function formatDay(date, reference) {
   const day = beginningOfDay(date).getTime();
-  const yesterday = beginningOfDay(reference);
-  if (day === yesterday.getTime()) return "Today";
+  const today = beginningOfDay(reference);
+  if (day === today.getTime()) return "Today";
+  const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
   if (day === yesterday.getTime()) return "Yesterday";
   return formatDate(date);
 }
 
 export function formatCurrency(amount) {
-  const sign = amount < 0 ? "-" : "";
-  return sign + "$" + groupDigits(Math.abs(amount), 2);
+  return signOf(amount) + "$" + groupDigits(Math.abs(amount), 2);
 }
 
 // Chips carry whole dollars: the shape of the month, not its cents.
 export function roundedCurrency(amount) {
-  return "$" + groupDigits(Math.abs(amount), 0);
+  return signOf(amount) + "$" + groupDigits(Math.abs(amount), 0);
 }
 
 // List rows sit under a heading that already says these are dollars.
 export function plainAmount(amount) {
-  return groupDigits(Math.abs(amount), 2);
+  return signOf(amount) + groupDigits(Math.abs(amount), 2);
+}
+
+function signOf(amount) {
+  return amount < 0 ? "-" : "";
 }
 
 function groupDigits(amount, decimals) {
@@ -907,12 +971,14 @@ export function beginningOfDay(date) {
 }
 
 export function plural(count, noun) {
-  return count + " " + noun + (count === 1 ? "" : "s");
+  return count + " " + pluralNoun(count, noun);
 }
 
-export function expenseNoun(count) {
-  return count === 1 ? "expense" : "expenses";
+export function pluralNoun(count, noun) {
+  return count === 1 ? noun : noun + "s";
 }
+
+const TRANSITION_SLACK_MS = 50;
 
 // An overlay's transition counts as over once it has been drawn. Transition's
 // own default waits for transitionend alone, which never arrives when no
@@ -935,8 +1001,6 @@ function settleTransition(element, done) {
   const timer = setTimeout(finish, seconds * 1000 + TRANSITION_SLACK_MS);
   element.addEventListener("transitionend", finish);
 }
-
-const TRANSITION_SLACK_MS = 50;
 
 function appVersion() {
   return document.querySelector('meta[name="version"]')?.content ?? "unknown";

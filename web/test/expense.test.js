@@ -9,7 +9,6 @@ import {
   categoryTotals,
   deleteMessage,
   expenseError,
-  expenseNoun,
   expenseFromForm,
   filterByCategory,
   formFromExpense,
@@ -28,6 +27,7 @@ import {
   parseExpenses,
   parseIsoDate,
   plainAmount,
+  pluralNoun,
   roundedCurrency,
   serializeExpenses,
   toIsoDate,
@@ -272,24 +272,24 @@ describe("knownCategories", () => {
 });
 
 describe("withCategoryToggled", () => {
-  test("adds a category the form does not carry", () => {
-    assert.equal(withCategoryToggled("food", "bills"), "bills food");
+  test("adds a category the form does not carry, in order", () => {
+    assert.deepEqual(withCategoryToggled(["food"], "bills"), ["bills", "food"]);
   });
 
   test("removes one it does", () => {
-    assert.equal(withCategoryToggled("bills food", "food"), "bills");
+    assert.deepEqual(withCategoryToggled(["bills", "food"], "food"), ["bills"]);
   });
 
   test("adds to an empty form", () => {
-    assert.equal(withCategoryToggled("", "food"), "food");
+    assert.deepEqual(withCategoryToggled([], "food"), ["food"]);
   });
 });
 
-describe("expenseNoun", () => {
+describe("pluralNoun", () => {
   test("counts one expense in the singular", () => {
-    assert.equal(expenseNoun(1), "expense");
-    assert.equal(expenseNoun(0), "expenses");
-    assert.equal(expenseNoun(14), "expenses");
+    assert.equal(pluralNoun(1, "expense"), "expense");
+    assert.equal(pluralNoun(0, "expense"), "expenses");
+    assert.equal(pluralNoun(14, "expense"), "expenses");
   });
 });
 
@@ -311,14 +311,14 @@ describe("deleteMessage", () => {
 describe("importMessage", () => {
   test("names the file and what it replaces", () => {
     assert.equal(
-      importMessage({ filename: "moneta.json", count: 96 }, 14),
+      importMessage({ filename: "moneta.json", expenses: new Array(96) }, 14),
       "moneta.json holds 96 expenses. Importing removes the 14 expenses on this device and cannot be undone.",
     );
   });
 
   test("claims nothing is lost when there is nothing to lose", () => {
     assert.match(
-      importMessage({ filename: "a.json", count: 3 }, 0),
+      importMessage({ filename: "a.json", expenses: new Array(3) }, 0),
       /replaces everything/,
     );
   });
@@ -369,9 +369,13 @@ describe("roundedCurrency", () => {
 });
 
 describe("plainAmount", () => {
-  test("drops the dollar sign and the sign, for rows under a heading", () => {
+  test("drops the dollar sign, for rows under a heading", () => {
     assert.equal(plainAmount(42.1), "42.10");
-    assert.equal(plainAmount(-42.1), "42.10");
+  });
+
+  test("keeps the minus sign, as the other two do", () => {
+    assert.equal(plainAmount(-42.1), "-42.10");
+    assert.equal(roundedCurrency(-528.1), "-$528");
   });
 });
 
@@ -412,13 +416,13 @@ describe("blankExpenseForm", () => {
     const form = blankExpenseForm();
     assert.equal(form.amount, "");
     assert.equal(form.description, "");
-    assert.equal(form.categories, "");
+    assert.deepEqual(form.categories, []);
     assert.equal(form.date, toIsoDate(new Date()));
   });
 });
 
 describe("formFromExpense", () => {
-  test("renders an expense as editable text", () => {
+  test("renders an expense as editable text and its categories", () => {
     const form = formFromExpense({
       id: 1,
       amount: 12.5,
@@ -428,18 +432,30 @@ describe("formFromExpense", () => {
     });
     assert.equal(form.amount, "12.5");
     assert.equal(form.description, "Groceries");
-    assert.equal(form.categories, "food shopping");
+    assert.deepEqual(form.categories, ["food", "shopping"]);
     assert.equal(form.date, "2026-02-12");
+  });
+
+  test("copies the categories, so editing the form leaves the expense alone", () => {
+    const expense = {
+      id: 1,
+      amount: 12.5,
+      description: "Groceries",
+      date: new Date(2026, 1, 12),
+      categories: ["food"],
+    };
+    formFromExpense(expense).categories.push("shopping");
+    assert.deepEqual(expense.categories, ["food"]);
   });
 });
 
 describe("expenseFromForm", () => {
-  test("parses the amount, trims the description, and splits categories", () => {
+  test("parses the amount, trims the description, and keeps the categories", () => {
     const expense = expenseFromForm({
       amount: "12.50",
       description: "  Groceries  ",
       date: "2026-02-12",
-      categories: "Shopping food",
+      categories: ["food", "shopping"],
     });
     assert.equal(expense.amount, 12.5);
     assert.equal(expense.description, "Groceries");
@@ -452,7 +468,7 @@ describe("expenseFromForm", () => {
       amount: "1",
       description: "x",
       date: "2026-02-12",
-      categories: "",
+      categories: [],
     });
     assert.equal(expense.date.getHours(), 0);
   });
@@ -462,7 +478,7 @@ describe("expenseFromForm", () => {
       amount: "1",
       description: "x",
       date: "",
-      categories: "",
+      categories: [],
     });
     assert.ok(isNaN(expense.date.getTime()));
   });
@@ -535,6 +551,17 @@ describe("expenseError", () => {
       "Invalid amount.",
     );
   });
+
+  test("rejects an amount that is not a number, as an imported file can hold", () => {
+    assert.equal(
+      expenseError({ ...validExpense(), amount: "5" }),
+      "Invalid amount.",
+    );
+    assert.equal(
+      expenseError({ ...validExpense(), amount: Infinity }),
+      "Invalid amount.",
+    );
+  });
 });
 
 describe("a form on its way to becoming an expense", () => {
@@ -542,7 +569,7 @@ describe("a form on its way to becoming an expense", () => {
     amount: "12.50",
     description: "Groceries",
     date: isoDaysFromToday(0),
-    categories: "food",
+    categories: ["food"],
   });
   const formError = (overrides) =>
     expenseError(expenseFromForm({ ...validForm(), ...overrides }));

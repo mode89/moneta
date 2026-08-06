@@ -19,7 +19,7 @@ const {
   findExpense,
   loadExpenses,
   parseExpenses,
-  replaceExpensesFromJson,
+  replaceExpenses,
   saveExpenses,
   saveNotice,
   serializeExpenses,
@@ -41,7 +41,7 @@ const filledIn = (overrides = {}) =>
     amount: "12.50",
     description: "Groceries",
     date: "2026-02-12",
-    categories: "food",
+    categories: ["food"],
     ...overrides,
   });
 
@@ -102,7 +102,7 @@ describe("updateExpense", () => {
     const id = expenses[0].id;
     updateExpense(
       id,
-      filledIn({ amount: "99", description: "Rent", categories: "" }),
+      filledIn({ amount: "99", description: "Rent", categories: [] }),
     );
     const updated = findExpense(id);
     assert.equal(updated.amount, 99);
@@ -192,7 +192,7 @@ describe("the Saved notice", () => {
   test("appears on save and disappears three seconds later", () => {
     mock.timers.enable({ apis: ["setTimeout"] });
     try {
-      saveExpenses();
+      saveExpenses(expenses);
       assert.equal(saveNotice(), "Saved");
       mock.timers.tick(3000);
       assert.equal(saveNotice(), null);
@@ -204,9 +204,9 @@ describe("the Saved notice", () => {
   test("stays visible for three seconds after the most recent save", () => {
     mock.timers.enable({ apis: ["setTimeout"] });
     try {
-      saveExpenses();
+      saveExpenses(expenses);
       mock.timers.tick(2000);
-      saveExpenses();
+      saveExpenses(expenses);
       mock.timers.tick(1500);
       assert.equal(saveNotice(), "Saved");
       mock.timers.tick(1500);
@@ -217,12 +217,14 @@ describe("the Saved notice", () => {
   });
 });
 
-describe("replaceExpensesFromJson", () => {
+describe("replaceExpenses", () => {
+  // The card that offers an import has already read the file, so what reaches
+  // the store is the parsed expenses.
+  const fromFile = (...stored) => parseExpenses(JSON.stringify(stored));
+
   test("replaces the current expenses and persists them", () => {
     addExpense(filledIn({ description: "Existing" }));
-    replaceExpensesFromJson(
-      JSON.stringify([expense({ description: "Imported" })]),
-    );
+    replaceExpenses(fromFile(expense({ description: "Imported" })));
     assert.deepEqual(
       expenses.map((each) => each.description),
       ["Imported"],
@@ -231,13 +233,13 @@ describe("replaceExpensesFromJson", () => {
   });
 
   test("reads dates as the calendar day written in the file", () => {
-    replaceExpensesFromJson(JSON.stringify([expense()]));
+    replaceExpenses(fromFile(expense()));
     assert.equal(toIsoDate(expenses[0].date), "2026-02-12");
   });
 
   test("imports an empty file as an empty list", () => {
     addExpense(filledIn());
-    replaceExpensesFromJson("[]");
+    replaceExpenses(fromFile());
     assert.equal(expenses.length, 0);
   });
 
@@ -245,9 +247,7 @@ describe("replaceExpensesFromJson", () => {
     mock.method(console, "error", () => {});
     addExpense(filledIn({ description: "Existing" }));
     const before = storedExpenses();
-    replaceExpensesFromJson(
-      JSON.stringify([expense(), expense({ id: 2, amount: -1 })]),
-    );
+    replaceExpenses(fromFile(expense(), expense({ id: 2, amount: -1 })));
     assert.deepEqual(alerts, ["File contains errors."]);
     assert.deepEqual(
       expenses.map((each) => each.description),
@@ -258,29 +258,22 @@ describe("replaceExpensesFromJson", () => {
 
   test("reports every problem it found to the console", () => {
     const logged = mock.method(console, "error", () => {});
-    replaceExpensesFromJson(
-      JSON.stringify([
-        expense({ amount: -1 }),
-        expense({ id: 2, description: "" }),
-      ]),
+    replaceExpenses(
+      fromFile(expense({ amount: -1 }), expense({ id: 2, description: "" })),
     );
     assert.deepEqual(
       logged.mock.calls.map((call) => call.arguments[0]),
       ["Invalid amount.", "Description cannot be empty."],
     );
   });
+});
 
-  test("rejects a malformed document", () => {
-    addExpense(filledIn({ description: "Existing" }));
-    replaceExpensesFromJson("not json");
-    assert.equal(alerts.length, 1);
-    assert.match(alerts[0], /^Failed to import expenses: /);
-    assert.equal(expenses.length, 1);
+describe("reading a file the import offers", () => {
+  test("refuses a malformed document", () => {
+    assert.throws(() => parseExpenses("not json"));
   });
 
-  test("rejects a document that is not a list of expenses", () => {
-    replaceExpensesFromJson(JSON.stringify({ expenses: [] }));
-    assert.equal(alerts.length, 1);
-    assert.match(alerts[0], /^Failed to import expenses: /);
+  test("refuses a document that is not a list of expenses", () => {
+    assert.throws(() => parseExpenses(JSON.stringify({ expenses: [] })));
   });
 });

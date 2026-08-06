@@ -60,7 +60,7 @@ for (const zone of ZONES) {
             amount: "10",
             description: "Coffee",
             date: iso,
-            categories: "",
+            categories: [],
           });
           const [restored] = parseExpenses(
             serializeExpenses([{ id: 1, ...expense }]),

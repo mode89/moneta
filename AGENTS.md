@@ -61,15 +61,15 @@ npx playwright-cli --help # for usage
 
 * There is no bundler and no compile step. The browser loads `main.js` as an ES module and resolves `@capacitor/core`, `solid-js`, `solid-js/web`, `solid-js/store`, `solid-js/html` and the transition packages through the import map in `index.html`. Every such module has to be named in **three lists that must stay in step**: `WEB_ASSETS` in `scripts/dev`, `FILES` in `web/e2e/server.js`, and the import map itself. A missing entry gives a blank page, not an error.
 * Markup uses Solid's `html` tagged template (no JSX, since JSX would need a compile step).
-* State is module level: a `createStore` array of expenses plus `createSignal`s `editedExpense` (an id, `NEW_EXPENSE`, or `null` — the one signal behind both dialogs), `showNumbers`, `saveNotice`.
+* State is module level: a `createStore` array of expenses plus `createSignal`s `overlays`, `activeCategory`, `unfoldedMonths`, `showNumbers`, `saveNotice`. `overlays` is the stack of what is open over the app, outermost first — `{ kind: "settings" }`, `{ kind: "newExpense" }`, `{ kind: "editExpense", id }`, `{ kind: "deleteExpense", id }`, `{ kind: "importConfirmation", filename, expenses }`. At most one overlay of a kind is open, so `openOverlay`, `closeOverlay(kind)` and `overlayOf(kind)` are the whole interface, and the back button pops the last.
 * Top-down ordering: `main` and `App` first, then components, then actions, then persistence, then small utilities (`toIsoDate`, `formatCurrency`, `beginningOfDay`, `now`, ...). Function declarations hoist, so no forward declarations are needed.
 * Dates are `Date` objects in state, ISO `YYYY-MM-DD` strings in JSON and in the modal's form. `parseIsoDate` / `toIsoDate` convert; `parseIsoDate` builds from local parts because `new Date("YYYY-MM-DD")` reads the text as UTC.
-* A form holds what the user typed (all strings); `expenseFromForm` is the only place it becomes an expense, and `expenseError` validates the expense — the same check the import path runs.
-* Every mutation that should persist calls `saveExpenses`, which also triggers the "Saved" bubble.
+* A form holds what the user typed — text, apart from `categories`, which is the array the chips carry; `expenseFromForm` is the only place it becomes an expense, and `expenseError` validates the expense — the same check the import path runs.
+* Every mutation that should persist calls `saveExpenses(expenses)`, which also raises the "Saved" bubble through `noticeSaved`.
 
 ### Two traps in `solid-js/html`
 
-* A zero-argument function passed as a **component** prop is turned into a reactive getter and invoked on access, so it cannot be a callback. `ExpenseModal` therefore receives one `actions` object (`save`, `remove`, `close`) rather than separate `onSave` / `onClose` props. Element handlers (`onClick=${...}`) are unaffected.
+* A zero-argument function passed as a **component** prop is turned into a reactive getter and invoked on access, so it cannot be a callback. `ExpenseSheet` and `CategoryPicker` therefore receive one `actions` object (`save`, `remove`, `close`) rather than separate `onSave` / `onClose` props. Element handlers (`onClick=${...}`) are unaffected.
 * Anything read from the store while building a component's props becomes a dependency of the surrounding expression. Reading the edited expense out of the store must stay inside `untrack`, or deleting it re-runs the expression with a stale id and throws.
 
 ## Reaching the native side
