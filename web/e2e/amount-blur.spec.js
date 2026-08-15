@@ -83,6 +83,27 @@ test.describe("revealing amounts", () => {
     await blurred(app.totalSpent);
   });
 
+  // The two taps sit a thumb's width apart on the same row, so the amount
+  // claims the whole end of it: a tap that lands beside the digits rather
+  // than on them still reveals, instead of opening the sheet over the list.
+  test("the amount is tapped by its whole end of the row", async ({ app }) => {
+    for (const description of ["Groceries", "Coffee"]) {
+      const row = app.expenseItem(description);
+      const { width, height } = await row.boundingBox();
+      // The corners furthest from the digits: hard against the screen edge,
+      // and level with the row's own top and bottom.
+      for (const y of [2, height - 3]) {
+        await row.click({ position: { x: width - 2, y } });
+
+        await expect(app.sheet).toHaveCount(0);
+        await revealed(app.totalSpent);
+
+        await row.click({ position: { x: width - 2, y } });
+        await blurred(app.totalSpent);
+      }
+    }
+  });
+
   test("tapping the rest of the row opens the sheet instead", async ({
     app,
   }) => {

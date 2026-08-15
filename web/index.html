@@ -208,8 +208,17 @@
       .dot.uncategorised { box-shadow: inset 0 0 0 1px var(--line); }
       .desc { font-size: 0.96rem; font-weight: 500; }
       .cats { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+      /* The tap that reveals amounts lands here, and a miss opens the edit
+         sheet instead, so the box is stretched over the whole end of the row:
+         the digits alone are 19px tall inside a 46px row and stop 22px short
+         of the screen edge. Negative margins cancel the padding, so the
+         digits stay where they were drawn. */
       .amt {
-        margin-left: auto;
+        display: flex;
+        align-items: center;
+        align-self: stretch;
+        margin: -13px -22px -13px auto;
+        padding: 13px 22px 13px 13px;
         font-variant-numeric: tabular-nums;
         font-weight: 700;
         font-size: 0.98rem;
