@@ -54,6 +54,10 @@ _Reference context — observed facts and standing conventions for this project,
 - `android/app/src/main/assets/public/` holds build output that can lag `web/`, so the installed APK shows a stale UI until `scripts/dev build` runs; a bug seen "in the app" may be a bug in old assets.
 - `scripts/dev serve` refreshes the assets it serves before serving them, so it never shows a stale UI.
 - `scripts/dev build-web` and `web/e2e/server.js` copy and serve `bootstrap.css`, `file_download.svg` and `file_upload.svg`, which `web/index.html` no longer references.
+- `<` cannot compare a symbol against a string, so `categoryTotals` breaks its ties through `categoryLabel` rather than on the raw name; comparing them directly throws where the uncategorised entry ties with a named one.
+- `dropVanishedFilter` asks `filterByCategory` rather than `expense.categories.includes(name)`. Why: the uncategorised filter is carried by an empty `categories`, which no `includes` can answer, so the filter cleared itself on the next save.
+- `.legend:empty` hides the chip row, but a month holding only untagged expenses now draws one chip whose filter is a no-op; only a month with no expenses at all leaves the row empty.
+- With `uncategorised` in it, four chips no longer fit a 412px screen: the smallest scrolls off the right of the legend, which is a scrolling line.
 - Export files written by the ClojureScript version carry `"categories": [""]` for an uncategorised expense, since it split the empty form field on whitespace without filtering.
 - Importing such a file drew a nameless chip in the header legend, which renders one chip per distinct category name; `parseExpenses` now drops the blank.
 - Chrome's `input type="number"` drops a typed decimal comma: typing `12,50` leaves the field value `"1250"`, a silent hundredfold error. No money field in this app can be a number input.
@@ -130,6 +134,11 @@ _Reference context — observed facts and standing conventions for this project,
 - The list is unboxed — rows on paper divided by hairline rules — with the current month open and earlier months folded to one line carrying that month's count and total, refolded on every launch.
 - Day headings read "Today"/"Yesterday" only inside the open month and plain dates elsewhere; the header total stays on the current month while an older month is unfolded.
 - Category chips under the header act as filters, narrowing the header total, the average per day and the fold lines, with no status line naming the active filter.
+- The legend carries a chip for expenses with no category, ranked by size among the rest rather than pinned to either end. Why: the chips then account for the whole month, and the row keeps one ordering rule.
+- The uncategorised filter value is the symbol `UNCATEGORISED`, not a name. Why: every category the user can reach is a lowercase word `parseCategories` produced, so any string sentinel could be typed as a category and collide with it.
+- The uncategorised chip carries no ink, only the ring a list row draws around an untagged expense. Why: a seventh colour would read as a category, which is what it is not.
+- That ring is `--muted` in both places, moved up from `--line` when the chip was added, and turns `--paper` on the selected chip. Why: a `--line` hairline all but vanishes at the chip's 9px and again on the selected chip's ink ground; one value keeps the two sizes reading as one drawing.
+- A fold line under the uncategorised filter reads "1 uncategorised", not "1 in uncategorised". Why: "in" names a category the expenses carry, and these carry none.
 - The header chip row is one horizontally scrolling line. Why: it is the only place every category is reachable and filterable.
 - The add/edit sheet's category chips are one horizontally scrolling line too. Why: wrapping grew the sheet with the category count and pushed Save and Delete below the fold.
 - The sheet's chips are ordered by recency, not by name, and a chip the form just named leads them. Why: the left of a scrolling line is the only part seen without scrolling.
@@ -217,6 +226,7 @@ _Reference context — observed facts and standing conventions for this project,
 - ? Whether to self-host Fraunces and DM Sans rather than fetch them from Google Fonts is undecided; as it stands the app needs the network for its typefaces.
 - ? Whether the sheet's `+ new` chip should become a typeahead that filters the offered chips is undecided; it is the only option weighed that scales past a scrolling line, and costs a filtered memo plus new tests.
 - ? No screen totals a category across months; the header chips are per-month only.
+- ? Whether the uncategorised chip should read "untagged" instead is undecided; it is about 40px shorter, which keeps a fourth chip in the legend's first view, against a word the rest of the app does not use.
 - ? Whether an import whose expenses share an id should renumber them rather than refuse the file is undecided.
 - ? Whether the safe-area padding lands at the right size is unverified; `maestro/safe-area.yaml` shows only that the edge controls are reachable, and the screenshot needs a human eye.
 - ? Whether the shared export file is usable in a receiving app is unverified; the Maestro flow stops at the chooser, which reports "Sharing 1 file" and the `moneta-YYYY-MM-DD.json` name.

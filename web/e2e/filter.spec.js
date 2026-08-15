@@ -185,3 +185,134 @@ test.describe("filtering by category", () => {
     await expect(app.rows).toHaveCount(3);
   });
 });
+
+// What carries no category is a chip like the rest, so the chips account for
+// the whole month rather than for the tagged part of it.
+const untagged = [
+  {
+    id: 1,
+    amount: 30,
+    description: "Lunch",
+    date: "2026-02-12",
+    categories: [],
+  },
+  {
+    id: 2,
+    amount: 20,
+    description: "Dinner",
+    date: "2026-02-11",
+    categories: ["food"],
+  },
+  {
+    id: 3,
+    amount: 5,
+    description: "Pharmacy",
+    date: "2026-02-11",
+    categories: [],
+  },
+  {
+    id: 4,
+    amount: 40,
+    description: "Bus pass",
+    date: "2026-02-10",
+    categories: ["travel"],
+  },
+  {
+    id: 5,
+    amount: 8,
+    description: "Stamps",
+    date: "2026-01-20",
+    categories: [],
+  },
+];
+
+test.describe("filtering by no category", () => {
+  test.beforeEach(async ({ app }) => {
+    await app.open({ now: FEBRUARY, expenses: untagged });
+  });
+
+  test("offers a chip for it, ranked by size among the rest", async ({
+    app,
+  }) => {
+    await expect(app.legendChips).toHaveText([
+      /travel/,
+      /uncategorised/,
+      /food/,
+    ]);
+    await expect(app.legendChip("uncategorised")).toContainText("$35");
+  });
+
+  test("draws its dot as a ring, the same one an untagged row wears", async ({
+    app,
+  }) => {
+    const ring = (locator) =>
+      locator.evaluate((dot) => getComputedStyle(dot).boxShadow);
+
+    // --muted, the ring both the chip and the row draw
+    expect(await ring(app.legendDot("uncategorised"))).toContain(
+      "rgb(147, 121, 106)",
+    );
+    expect(await ring(app.legendDot("uncategorised"))).toEqual(
+      await ring(app.dotOf("Lunch")),
+    );
+    await expect(app.legendDot("uncategorised")).toHaveCSS(
+      "background-color",
+      "rgba(0, 0, 0, 0)",
+    );
+  });
+
+  test("turns that ring to paper once the chip is selected", async ({
+    app,
+  }) => {
+    await app.legendChip("uncategorised").click();
+
+    // --paper, since --muted all but vanishes into the selected chip's ink
+    await expect(app.legendDot("uncategorised")).toHaveCSS(
+      "box-shadow",
+      "rgb(251, 247, 241) 0px 0px 0px 1px inset",
+    );
+  });
+
+  test("narrows the list and the header to what carries no category", async ({
+    app,
+  }) => {
+    await app.legendChip("uncategorised").click();
+
+    await expect(app.legendChip("uncategorised")).toHaveClass(/on/);
+    await expect(app.listedDescriptions).toHaveText(["Lunch", "Pharmacy"]);
+    await expect(app.totalSpent).toHaveText("$35.00");
+    await expect(app.expenseCount).toHaveText("2 expenses");
+  });
+
+  test("names an earlier month's fold line without a preposition", async ({
+    app,
+  }) => {
+    await app.legendChip("uncategorised").click();
+
+    await expect(app.foldHelp("January 2026")).toHaveText("1 uncategorised");
+    await expect(app.foldTotal("January 2026")).toHaveText("$8.00");
+  });
+
+  test("clears itself when the last untagged expense this month goes", async ({
+    app,
+  }) => {
+    await app.legendChip("uncategorised").click();
+
+    await app.deleteExpense("Lunch");
+    await app.deleteExpense("Pharmacy");
+
+    await expect(app.legendChip("uncategorised")).toHaveCount(0);
+    await expect(app.listedDescriptions).toHaveText(["Dinner", "Bus pass"]);
+  });
+
+  test("takes in an expense stripped of its categories", async ({ app }) => {
+    await expect(app.legendChip("food")).toContainText("$20");
+
+    await app.openExpense("Dinner");
+    await app.fillForm({ categories: "" });
+    await app.submit();
+
+    await expect(app.legendChip("food")).toHaveCount(0);
+    await expect(app.legendChip("uncategorised")).toContainText("$55");
+  });
+});

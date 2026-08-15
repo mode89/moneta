@@ -5,12 +5,15 @@ import {
   averagePerDay,
   beginningOfDay,
   blankExpenseForm,
+  UNCATEGORISED,
   categoryInk,
+  categoryLabel,
   categoryTotals,
   deleteMessage,
   expenseError,
   expenseFromForm,
   filterByCategory,
+  filterSummary,
   formFromExpense,
   formatCurrency,
   formatDate,
@@ -162,6 +165,13 @@ describe("filterByCategory", () => {
       bus,
     ]);
   });
+
+  test("keeps the expenses carrying no category at all", () => {
+    const lunch = anExpense({ id: 3, categories: [] });
+    assert.deepEqual(filterByCategory([groceries, bus, lunch], UNCATEGORISED), [
+      lunch,
+    ]);
+  });
 });
 
 describe("groupByMonth", () => {
@@ -210,8 +220,46 @@ describe("categoryTotals", () => {
     ]);
   });
 
-  test("ignores expenses with no categories", () => {
-    assert.deepEqual(categoryTotals([anExpense({})]), []);
+  test("totals expenses with no categories under UNCATEGORISED", () => {
+    const expenses = [
+      anExpense({ amount: 60, categories: ["food"] }),
+      anExpense({ amount: 25, categories: [] }),
+      anExpense({ amount: 15, categories: [] }),
+    ];
+    assert.deepEqual(categoryTotals(expenses), [
+      { name: "food", total: 60 },
+      { name: UNCATEGORISED, total: 40 },
+    ]);
+  });
+
+  test("ranks the uncategorised total by size, like any other", () => {
+    const expenses = [
+      anExpense({ amount: 10, categories: ["food"] }),
+      anExpense({ amount: 30, categories: [] }),
+      anExpense({ amount: 20, categories: ["travel"] }),
+    ];
+    assert.deepEqual(
+      categoryTotals(expenses).map((category) => category.name),
+      [UNCATEGORISED, "travel", "food"],
+    );
+  });
+
+  test("is empty for no expenses", () => {
+    assert.deepEqual(categoryTotals([]), []);
+  });
+});
+
+describe("categoryLabel", () => {
+  test("names the uncategorised sentinel, and every other category itself", () => {
+    assert.equal(categoryLabel(UNCATEGORISED), "uncategorised");
+    assert.equal(categoryLabel("food"), "food");
+  });
+});
+
+describe("filterSummary", () => {
+  test("says what a filter left, as a place or as an adjective", () => {
+    assert.equal(filterSummary(3, "food"), "3 in food");
+    assert.equal(filterSummary(1, UNCATEGORISED), "1 uncategorised");
   });
 });
 
