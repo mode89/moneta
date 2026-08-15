@@ -127,6 +127,7 @@ export class MonetaApp {
     this.amountInput = page.locator("#expense-amount");
     this.descriptionInput = page.locator("#expense-description");
     this.dateInput = page.locator("#expense-date");
+    this.categoryBlock = this.sheet.locator(".chiprow");
     this.categoryChips = this.sheet.locator(".chiprow .chip");
     this.newCategoryChip = this.categoryChips.filter({ hasText: "+ new" });
     this.chipField = this.sheet.locator(".chip-field");
@@ -260,6 +261,35 @@ export class MonetaApp {
 
   foldHelp(month) {
     return this.foldLine(month).locator(".help");
+  }
+
+  // --- the shape of the chip block -------------------------------------
+  //
+  // Geometry, so these read the page rather than name a locator. Nothing here
+  // moves once the sheet is in the page: it slides in on opacity and a
+  // transform, neither of which changes what is laid out.
+
+  // How tall the block is drawn against how tall its chips are, and how far
+  // through them it has been scrolled.
+  async categoryBlockScroll() {
+    return this.categoryBlock.evaluate((block) => ({
+      clientHeight: block.clientHeight,
+      scrollHeight: block.scrollHeight,
+      scrollTop: block.scrollTop,
+    }));
+  }
+
+  // The y of each chip, which tells one wrapped line from the next.
+  async categoryChipTops() {
+    return this.categoryChips.evaluateAll((chips) =>
+      chips.map((chip) => Math.round(chip.getBoundingClientRect().top)),
+    );
+  }
+
+  async categoryChipHeights() {
+    return this.categoryChips.evaluateAll((chips) =>
+      chips.map((chip) => Math.round(chip.getBoundingClientRect().height)),
+    );
   }
 
   // --- driving the page -----------------------------------------------

@@ -286,29 +286,45 @@ describe("knownCategories", () => {
     assert.deepEqual(knownCategories(expenses), ["food", "household"]);
   });
 
-  test("puts the most recently spent on first", () => {
+  test("puts the category carrying the most expenses first", () => {
     const expenses = [
-      anExpense({ date: new Date(2026, 6, 1), categories: ["household"] }),
-      anExpense({ date: new Date(2026, 6, 20), categories: ["food"] }),
-      anExpense({ date: new Date(2026, 6, 10), categories: ["travel"] }),
+      anExpense({ categories: ["household"] }),
+      anExpense({ categories: ["food"] }),
+      anExpense({ categories: ["food"] }),
+      anExpense({ categories: ["travel"] }),
+      anExpense({ categories: ["travel"] }),
+      anExpense({ categories: ["travel"] }),
     ];
     assert.deepEqual(knownCategories(expenses), [
-      "food",
       "travel",
+      "food",
       "household",
     ]);
   });
 
-  test("ranks a category by its newest expense", () => {
+  // The whole point of counting is that the order barely moves: one more
+  // expense is one more vote, not a jump to the front.
+  test("leaves the order alone when the newest expense changes nothing", () => {
     const expenses = [
-      anExpense({ date: new Date(2026, 6, 20), categories: ["food"] }),
-      anExpense({ date: new Date(2026, 6, 1), categories: ["travel"] }),
+      anExpense({ date: new Date(2026, 6, 1), categories: ["food"] }),
+      anExpense({ date: new Date(2026, 6, 2), categories: ["food"] }),
+      anExpense({ date: new Date(2026, 6, 3), categories: ["food"] }),
       anExpense({ date: new Date(2026, 6, 25), categories: ["travel"] }),
     ];
-    assert.deepEqual(knownCategories(expenses), ["travel", "food"]);
+    assert.deepEqual(knownCategories(expenses), ["food", "travel"]);
   });
 
-  test("sorts categories spent on the same day by name", () => {
+  test("breaks a tie on count with the most recently spent on", () => {
+    const expenses = [
+      anExpense({ date: new Date(2026, 6, 1), categories: ["household"] }),
+      anExpense({ date: new Date(2026, 6, 2), categories: ["household"] }),
+      anExpense({ date: new Date(2026, 6, 10), categories: ["food"] }),
+      anExpense({ date: new Date(2026, 6, 20), categories: ["food"] }),
+    ];
+    assert.deepEqual(knownCategories(expenses), ["food", "household"]);
+  });
+
+  test("sorts categories tied on count and date by name", () => {
     const expenses = [
       anExpense({ categories: ["travel", "food", "household"] }),
     ];
@@ -317,6 +333,17 @@ describe("knownCategories", () => {
       "household",
       "travel",
     ]);
+  });
+
+  // An expense repeating a category cannot count itself twice, or one badly
+  // written file would push a category to the top for good.
+  test("counts an expense once per category it carries", () => {
+    const expenses = [
+      anExpense({ categories: ["food", "food"] }),
+      anExpense({ categories: ["travel"] }),
+      anExpense({ categories: ["travel"] }),
+    ];
+    assert.deepEqual(knownCategories(expenses), ["travel", "food"]);
   });
 
   test("includes the ones the open form carries", () => {
