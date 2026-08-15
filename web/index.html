@@ -135,12 +135,21 @@
         justify-content: center;
       }
 
-      /* category chips */
+      /* category chips: the sheet's picker wraps and scrolls down, so a long
+         list is read at a glance rather than swiped through sideways. It stops
+         at three lines and the top of a fourth — a chip is 33px tall — because
+         a clip landing flush between two lines looks like the end of the list,
+         and the sliced line is the only sign that there is more. The legend
+         under the header stays one line: it summarises the month, and the
+         chips beyond the edge are the small ones. */
       .chiprow {
         display: flex;
         gap: 6px;
-        flex-wrap: nowrap;
-        overflow-x: auto;
+        flex-wrap: wrap;
+        /* or the wrapped lines stretch and the chips draw as tall ovals */
+        align-content: flex-start;
+        max-height: calc(3 * 33px + 3 * 6px + 16px);
+        overflow-y: auto;
         scrollbar-width: none;
       }
       .chiprow::-webkit-scrollbar { display: none; }

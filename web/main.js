@@ -353,8 +353,9 @@ function ExpenseSheet(props) {
     </div>`;
 }
 
-// Every category used before, most recent first, and a field that names a new
-// one. A typed name is taken on space, Enter or leaving the field.
+// A field that names a new category, and then every category used before, the
+// one carrying the most expenses first. A typed name is taken on space, Enter
+// or leaving the field.
 function CategoryPicker(props) {
   const [namingCategory, setNamingCategory] = createSignal(false);
   // The typed text is held outside the reactive graph: reading it in the markup
@@ -387,19 +388,10 @@ function CategoryPicker(props) {
       setNamingCategory(false);
     }
   };
+  // Naming a category leads, since the block opens at the top: last in a list
+  // that clips at three lines, it would have to be scrolled to.
   return html`
     <div class="chiprow">
-      <${For} each=${offered}>
-        ${(name) => html`
-          <button
-            class=${() => "chip" + (props.chosen.includes(name) ? " on" : "")}
-            onMouseDown=${keepFocus}
-            onClick=${() => props.actions.toggle(name)}
-          >
-            <i style=${{ background: categoryInk(name) }}></i>
-            ${name}${() => (props.chosen.includes(name) ? " ✕" : "")}
-          </button>`}
-      <//>
       ${() =>
         namingCategory()
           ? html`<input
@@ -411,6 +403,17 @@ function CategoryPicker(props) {
               onBlur=${commitDraft}
             />`
           : html`<button class="chip" onClick=${nameCategory}>+ new</button>`}
+      <${For} each=${offered}>
+        ${(name) => html`
+          <button
+            class=${() => "chip" + (props.chosen.includes(name) ? " on" : "")}
+            onMouseDown=${keepFocus}
+            onClick=${() => props.actions.toggle(name)}
+          >
+            <i style=${{ background: categoryInk(name) }}></i>
+            ${name}${() => (props.chosen.includes(name) ? " ✕" : "")}
+          </button>`}
+      <//>
     </div>`;
 }
 
@@ -901,22 +904,31 @@ export function parseCategories(input) {
   return [...new Set(named)].sort();
 }
 
-// Every category the user has ever used, the most recently spent on first and
-// ties broken by name, behind the ones this form carries that are new — so a
-// chip never disappears while it is selected.
+// Every category the user has ever used, the one carrying the most expenses
+// first, ties broken by the most recently spent on and then by name, behind
+// the ones this form carries that are new — so a chip never disappears while
+// it is selected. Counting rather than dating is what keeps the chips still:
+// dating moved the category just used to the front and shifted every chip
+// ahead of it, so no chip was ever twice in the same place.
 export function knownCategories(expenses, extra = []) {
+  const count = new Map();
   const lastSpent = new Map();
   for (const expense of expenses)
-    for (const category of expense.categories) {
+    // A category an expense repeats is still one expense: counting it twice
+    // would let one badly written file hold the top of the list for good.
+    for (const category of new Set(expense.categories)) {
+      count.set(category, (count.get(category) ?? 0) + 1);
       const seen = lastSpent.get(category);
       if (seen === undefined || expense.date > seen)
         lastSpent.set(category, expense.date);
     }
-  const used = [...lastSpent.keys()].sort(
+  const used = [...count.keys()].sort(
     (one, other) =>
-      lastSpent.get(other) - lastSpent.get(one) || one.localeCompare(other),
+      count.get(other) - count.get(one) ||
+      lastSpent.get(other) - lastSpent.get(one) ||
+      one.localeCompare(other),
   );
-  return [...extra.filter((name) => !lastSpent.has(name)), ...used];
+  return [...extra.filter((name) => !count.has(name)), ...used];
 }
 
 export function withCategoryToggled(categories, category) {
