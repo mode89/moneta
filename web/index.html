@@ -170,6 +170,11 @@
       }
       .chip.on { background: var(--ink); color: var(--paper); }
       .chip i { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+      /* the uncategorised chip carries no ink, only the ring a list row draws
+         around an expense with no category. On the selected chip that ring
+         would all but vanish into the ink ground, so it turns to paper. */
+      .chip i.hollow { box-shadow: inset 0 0 0 1px var(--muted); }
+      .chip.on i.hollow { box-shadow: inset 0 0 0 1px var(--paper); }
       .chip-field {
         border: none;
         border-radius: 999px;
@@ -205,7 +210,9 @@
         user-select: none;
       }
       .dot { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; }
-      .dot.uncategorised { box-shadow: inset 0 0 0 1px var(--line); }
+      /* the same ring the uncategorised chip wears, so one drawing means one
+         thing at both sizes */
+      .dot.uncategorised { box-shadow: inset 0 0 0 1px var(--muted); }
       .desc { font-size: 0.96rem; font-weight: 500; }
       .cats { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
       .amt {

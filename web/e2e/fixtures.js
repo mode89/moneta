@@ -242,6 +242,10 @@ export class MonetaApp {
     return this.legendChips.filter({ hasText: name });
   }
 
+  legendDot(name) {
+    return this.legendChip(name).locator("i");
+  }
+
   categoryChip(name) {
     return this.categoryChips.filter({ hasText: name });
   }

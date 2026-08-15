@@ -101,8 +101,11 @@ function MonthSummary() {
     </div>`;
 }
 
-// One chip per category spent on this month, largest first. Tapping filters
-// the whole list; tapping the selected one clears the filter.
+// One chip per category spent on this month, largest first, plus one for what
+// carries no category at all. Tapping filters the whole list; tapping the
+// selected one clears the filter. The uncategorised chip takes no ink: it wears
+// the ring a row draws around an expense with no category, so it is read as an
+// absence rather than as a seventh colour.
 function CategoryLegend() {
   const totals = createMemo(() => categoryTotals(currentMonthExpenses()));
   return html`
@@ -114,8 +117,15 @@ function CategoryLegend() {
               "chip" + (activeCategory() === category.name ? " on" : "")}
             onClick=${() => toggleFilter(category.name)}
           >
-            <i style=${{ background: categoryInk(category.name) }}></i>
-            ${category.name}
+            <i
+              class=${category.name === UNCATEGORISED ? "hollow" : ""}
+              style=${
+                category.name === UNCATEGORISED
+                  ? {}
+                  : { background: categoryInk(category.name) }
+              }
+            ></i>
+            ${categoryLabel(category.name)}
             <${Amount} value=${category.total} format=${roundedCurrency} />
           </button>`}
       <//>
@@ -206,7 +216,7 @@ function FoldedMonth(props) {
   const foldSummary = () => {
     const count = month.expenses.length;
     const filter = activeCategory();
-    if (filter) return html`<span>${`${count} in ${filter}`}</span>`;
+    if (filter) return html`<span>${filterSummary(count, filter)}</span>`;
     if (!unfolded()) return html`<span>${plural(count, "expense")}</span>`;
     return html`<span>
       ${plural(count, "expense") + " · "}
@@ -631,14 +641,14 @@ function nextId(expenses) {
 }
 
 // The chip is the only way to clear a filter, so a filter that outlived the
-// last expense carrying it would narrow the list with nothing left to tap.
+// last expense carrying it would narrow the list with nothing left to tap. It
+// asks filterByCategory rather than the expense itself, since the uncategorised
+// filter is carried by an empty `categories` and not by a name in it.
 function dropVanishedFilter() {
-  const name = activeCategory();
-  if (!name) return;
-  const carried = currentMonthExpenses().some((expense) =>
-    expense.categories.includes(name),
-  );
-  if (!carried) setActiveCategory(null);
+  const filter = activeCategory();
+  if (!filter) return;
+  if (filterByCategory(currentMonthExpenses(), filter).length === 0)
+    setActiveCategory(null);
 }
 
 // Returns an error message for an invalid expense, or null.
@@ -925,8 +935,21 @@ export function withCategoryToggled(categories, category) {
   return [...categories, category].sort();
 }
 
+// The filter value standing for "carries no category at all". A symbol, since
+// every name the user can reach is a lowercase word parseCategories produced,
+// and any string sentinel could be typed as a category and collide with it.
+export const UNCATEGORISED = Symbol("uncategorised");
+
+// What a filter, a chip or a fold line calls a category. Only the sentinel
+// needs naming; every other category is its own name.
+export function categoryLabel(category) {
+  return category === UNCATEGORISED ? "uncategorised" : category;
+}
+
 export function filterByCategory(expenses, category) {
   if (!category) return expenses;
+  if (category === UNCATEGORISED)
+    return expenses.filter((expense) => expense.categories.length === 0);
   return expenses.filter((expense) => expense.categories.includes(category));
 }
 
@@ -965,17 +988,25 @@ export function groupByDay(expenses) {
     }));
 }
 
-// Largest spend first, ties broken by name so the order never wavers.
+// Largest spend first, ties broken by name so the order never wavers. What
+// carries no category totals under UNCATEGORISED and ranks by size with the
+// rest, so the chips account for the whole month rather than for the tagged
+// part of it. Ties compare categoryLabel, not the name: the sentinel is a
+// symbol, which `<` cannot compare against a string.
 export function categoryTotals(expenses) {
   const totals = new Map();
-  for (const expense of expenses)
-    for (const category of expense.categories)
+  for (const expense of expenses) {
+    const carried =
+      expense.categories.length === 0 ? [UNCATEGORISED] : expense.categories;
+    for (const category of carried)
       totals.set(category, (totals.get(category) ?? 0) + expense.amount);
+  }
   return [...totals.entries()]
     .map(([name, total]) => ({ name, total }))
     .sort(
       (one, other) =>
-        other.total - one.total || (one.name < other.name ? -1 : 1),
+        other.total - one.total ||
+        (categoryLabel(one.name) < categoryLabel(other.name) ? -1 : 1),
     );
 }
 
@@ -1096,6 +1127,14 @@ export function beginningOfDay(date) {
   const day = new Date(date);
   day.setHours(0, 0, 0, 0);
   return day;
+}
+
+// A fold line's count while a filter is on. "in food" names a category the
+// expenses carry; nothing is carried by an uncategorised one, so it reads as a
+// plain adjective rather than as a place they sit in.
+export function filterSummary(count, category) {
+  if (category === UNCATEGORISED) return count + " uncategorised";
+  return count + " in " + category;
 }
 
 export function plural(count, noun) {
